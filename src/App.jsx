@@ -18,8 +18,7 @@ const firebaseConfig = {
   appId: "1:236845017887:web:648a67ff584b63bb9d1e2a"
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+const fbApp = initializeApp(firebaseConfig);
 const db = getDatabase(fbApp);
 
 const ADMIN_PASSWORD = "papiraro2143";
