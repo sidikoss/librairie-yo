@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { initializeApp } from "firebase/app";
 import {
-  getDatabase, ref, onValue, push, remove, update, get
+  getDatabase, ref, onValue, push, remove, update, get, set
 } from "firebase/database";
 
 // ─────────────────────────────────────────────────────────────
@@ -25,7 +25,7 @@ const db = getDatabase(fbApp);
 // ─────────────────────────────────────────────────────────────
 const ADMIN_PASSWORD = "papiraro2143";
 const OM_NUMBER      = "224613908784";
-const WA_NUMBER      = "224661862044"; // Support WhatsApp
+const WA_NUMBER      = "224661862044";
 const TELEGRAM_BOT_TOKEN = "VOTRE_BOT_TOKEN";
 const TELEGRAM_CHAT_ID   = "VOTRE_CHAT_ID";
 
@@ -33,13 +33,12 @@ const TELEGRAM_CHAT_ID   = "VOTRE_CHAT_ID";
 // SÉCURITÉ — Session admin (2h) + Rate limiter + Wishlist
 // ─────────────────────────────────────────────────────────────
 const SESSION_KEY = "yo_adm_sess";
-const SESSION_TTL = 7_200_000; // 2 heures
+const SESSION_TTL = 7_200_000;
 
 const saveSession  = () => localStorage.setItem(SESSION_KEY, Date.now().toString());
 const loadSession  = () => { const t=parseInt(localStorage.getItem(SESSION_KEY)||"0"); return !!(t && Date.now()-t<SESSION_TTL); };
 const clearSession = () => localStorage.removeItem(SESSION_KEY);
 
-// Rate limit : max 3 commandes / 10 min par appareil
 const RATE_KEY = "yo_rate";
 const canOrder = () => {
   try {
@@ -51,7 +50,6 @@ const canOrder = () => {
   } catch { return true; }
 };
 
-// Wishlist locale
 const WISH_KEY  = "yo_wishlist";
 const loadWish  = () => { try { return JSON.parse(localStorage.getItem(WISH_KEY)||"[]"); } catch { return []; } };
 const saveWish  = w  => { try { localStorage.setItem(WISH_KEY, JSON.stringify(w)); } catch {} };
@@ -137,7 +135,7 @@ function exportCSV(orders) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// IA / PDF
+// PDF.JS — chargement unique
 // ─────────────────────────────────────────────────────────────
 function readFileAsBase64(file) {
   return new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=rej; fr.readAsDataURL(file); });
@@ -153,6 +151,7 @@ async function loadPDFJS() {
   });
 }
 
+// Extrait la couverture (page 1) depuis un PDF base64
 async function extractPDFCover(b64DataUrl) {
   try {
     const pdfjs=await loadPDFJS();
@@ -171,6 +170,19 @@ async function extractPDFCover(b64DataUrl) {
   } catch { return null; }
 }
 
+// ✨ NOUVEAU — Compte le nombre de pages d'un PDF
+async function extractPDFPageCount(b64DataUrl) {
+  try {
+    const pdfjs=await loadPDFJS();
+    const raw=atob(b64DataUrl.split(",")[1]);
+    const bytes=new Uint8Array(raw.length);
+    for(let i=0;i<raw.length;i++) bytes[i]=raw.charCodeAt(i);
+    const pdf=await pdfjs.getDocument({data:bytes}).promise;
+    return pdf.numPages;
+  } catch { return null; }
+}
+
+// Analyse IA du PDF (titre, auteur, catégorie, description)
 async function analyzeBookPDF(b64DataUrl) {
   try {
     const base64=b64DataUrl.split(",")[1];
@@ -209,7 +221,7 @@ async function sendTelegramNotif(order) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// CSS
+// CSS (identique — aucun changement visuel)
 // ─────────────────────────────────────────────────────────────
 const FONTS = `@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,800;1,400&family=DM+Sans:wght@300;400;500;600&display=swap');`;
 
@@ -223,7 +235,6 @@ const CSS = `
 }
 body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh}
 
-/* ── NAV ── */
 .nav{position:sticky;top:0;z-index:100;height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 1.5rem;background:rgba(15,13,11,.97);backdrop-filter:blur(12px);border-bottom:1px solid var(--bd)}
 .logo{font-family:'Playfair Display',serif;font-size:1.35rem;font-weight:800;color:var(--cream);cursor:pointer;user-select:none}
 .logo em{color:var(--gold);font-style:normal}
@@ -243,7 +254,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .badge{background:var(--gold);color:#0f0d0b;border-radius:50%;width:17px;height:17px;font-size:.65rem;font-weight:700;display:flex;align-items:center;justify-content:center}
 .admin-bar{background:rgba(201,150,58,.08);border-bottom:1px solid rgba(201,150,58,.25);padding:.5rem 1.5rem;display:flex;align-items:center;justify-content:space-between;font-size:.78rem;color:var(--gold);flex-wrap:wrap;gap:.5rem}
 
-/* ── HERO ── */
 .hero{text-align:center;padding:3.5rem 1.5rem 2rem;background:radial-gradient(ellipse at 50% 0%,rgba(201,150,58,.08) 0%,transparent 65%);border-bottom:1px solid var(--bd)}
 .hero-tag{font-size:.7rem;letter-spacing:.3em;text-transform:uppercase;color:var(--gold);margin-bottom:.9rem}
 .hero h1{font-family:'Playfair Display',serif;font-size:clamp(2rem,5.5vw,3.8rem);font-weight:800;color:var(--cream);line-height:1.1;margin-bottom:.8rem}
@@ -254,7 +264,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .search-box input:focus{border-color:var(--gold)}.search-box input::placeholder{color:var(--muted)}
 .si{position:absolute;left:.8rem;top:50%;transform:translateY(-50%);color:var(--muted)}
 
-/* ── PILLS & SORT ── */
 .cat-pills{display:flex;gap:.4rem;overflow-x:auto;padding:.1rem .1rem .5rem;scrollbar-width:none;max-width:760px;margin:0 auto}
 .cat-pills::-webkit-scrollbar{display:none}
 .pill{background:var(--s2);border:1px solid var(--bd);color:var(--muted);padding:.25rem .7rem;border-radius:20px;font-size:.72rem;cursor:pointer;white-space:nowrap;transition:all .18s}
@@ -264,13 +273,11 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .sort-btn{background:var(--s2);border:1px solid var(--bd);color:var(--muted);padding:.22rem .6rem;border-radius:6px;font-size:.7rem;cursor:pointer;transition:all .18s;font-family:'DM Sans';white-space:nowrap}
 .sort-btn.active{background:rgba(201,150,58,.12);border-color:var(--gold);color:var(--gold)}
 
-/* ── GRID ── */
 .page{padding:2rem 1.5rem;max-width:1100px;margin:0 auto}
 .grid-title{font-family:'Playfair Display',serif;font-size:1.35rem;color:var(--cream);margin-bottom:.2rem}
 .grid-sub{color:var(--muted);font-size:.78rem;margin-bottom:1rem}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:1.2rem}
 
-/* ── FEATURED SECTION ── */
 .featured-section{padding:1.5rem 1.5rem 0;max-width:1100px;margin:0 auto}
 .featured-title{font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--cream);margin-bottom:1rem;display:flex;align-items:center;gap:.5rem}
 .featured-scroll{display:flex;gap:1rem;overflow-x:auto;padding:.2rem .1rem 1rem;scrollbar-width:thin;scrollbar-color:var(--bd) transparent}
@@ -279,7 +286,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .featured-scroll::-webkit-scrollbar-thumb{background:var(--bd);border-radius:2px}
 .featured-card{flex-shrink:0;width:155px}
 
-/* ── CARD ── */
 .card{background:var(--s1);border:1px solid var(--bd);border-radius:10px;overflow:hidden;transition:transform .2s,box-shadow .2s;cursor:pointer}
 .card:hover{transform:translateY(-3px);box-shadow:0 10px 32px rgba(0,0,0,.5)}
 .card-cover{width:100%;aspect-ratio:3/4;background:linear-gradient(135deg,var(--s2),#2a2420);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.4rem;position:relative;overflow:hidden}
@@ -288,7 +294,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .emo{font-size:2.3rem;position:relative;z-index:1}
 .init{font-family:'Playfair Display',serif;font-size:1.6rem;font-weight:800;color:var(--gold);opacity:.55;position:relative;z-index:1}
 
-/* badges sur les cartes */
 .has-file-badge{position:absolute;bottom:.5rem;left:.5rem;background:var(--green);color:#fff;font-size:.58rem;font-weight:700;padding:.15rem .4rem;border-radius:4px;z-index:2;letter-spacing:.03em}
 .new-badge{position:absolute;top:.5rem;left:.5rem;background:var(--om);color:#fff;font-size:.6rem;font-weight:700;padding:.15rem .45rem;border-radius:4px;z-index:2;text-transform:uppercase;letter-spacing:.04em}
 .featured-badge{position:absolute;top:.5rem;left:.5rem;background:var(--gold);color:#0f0d0b;font-size:.6rem;font-weight:700;padding:.15rem .45rem;border-radius:4px;z-index:2;text-transform:uppercase}
@@ -298,14 +303,16 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .card-body{padding:.8rem}
 .cat-tag{font-size:.6rem;text-transform:uppercase;letter-spacing:.12em;color:var(--gold);margin-bottom:.22rem}
 .title{font-family:'Playfair Display',serif;font-size:.93rem;font-weight:700;color:var(--cream);line-height:1.25;margin-bottom:.18rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.author{font-size:.73rem;color:var(--muted);margin-bottom:.6rem}
+.author{font-size:.73rem;color:var(--muted);margin-bottom:.4rem}
+/* ✨ NOUVEAU — ligne pages */
+.pages-info{font-size:.65rem;color:var(--muted);margin-bottom:.5rem;display:flex;align-items:center;gap:.25rem}
+.pages-info span{color:rgba(201,150,58,.75)}
 .card-foot{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.4rem}
 .price{font-weight:700;color:var(--gold);font-size:.98rem}
 .stock-lbl{font-size:.63rem;color:var(--muted)}
 .add-btn{background:var(--gold);color:#0f0d0b;border:none;border-radius:5px;padding:.3rem .65rem;font-size:.72rem;font-weight:700;cursor:pointer;transition:background .18s}
 .add-btn:hover{background:var(--gl)}
 
-/* ── MODALS ── */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(5px);z-index:200;display:flex;align-items:center;justify-content:center;padding:1rem}
 .modal{background:var(--s1);border:1px solid var(--bd);border-radius:14px;padding:1.8rem;max-width:520px;width:100%;max-height:92vh;overflow-y:auto}
 .modal h2{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cream);margin-bottom:1.2rem}
@@ -322,7 +329,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .err{color:#f08080;font-size:.76rem;margin-top:.32rem}
 .field-err{color:#f08080;font-size:.72rem;margin-top:.2rem}
 
-/* upload */
 .upload-zone{border:2px dashed var(--bd);border-radius:8px;padding:1.2rem;text-align:center;cursor:pointer;transition:border-color .2s;position:relative}
 .upload-zone:hover{border-color:var(--gold)}
 .upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer}
@@ -338,12 +344,10 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .ai-row{display:flex;align-items:center;gap:.5rem;font-size:.76rem;color:var(--gold);margin:.3rem 0 .6rem;background:rgba(201,150,58,.07);padding:.4rem .7rem;border-radius:6px}
 .ai-analysis-box{background:rgba(201,150,58,.05);border:1px solid rgba(201,150,58,.18);border-radius:8px;padding:.8rem 1rem;margin-bottom:.9rem;font-size:.78rem;color:var(--muted)}
 
-/* promo */
 .promo-row{display:flex;gap:.5rem;align-items:stretch;margin-bottom:.7rem}
 .promo-row .fi{margin:0}
 .promo-applied{background:rgba(39,174,96,.08);border:1px solid rgba(39,174,96,.3);border-radius:7px;padding:.45rem .85rem;font-size:.8rem;color:var(--green);display:flex;align-items:center;justify-content:space-between;margin-bottom:.8rem}
 
-/* ── CART ── */
 .cart-side{position:fixed;right:0;top:0;bottom:0;width:min(380px,100vw);background:var(--s1);border-left:1px solid var(--bd);z-index:300;padding:1.4rem;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s ease}
 .cart-side.open{transform:translateX(0)}
 .co{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:299}
@@ -363,7 +367,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .ctotal{display:flex;justify-content:space-between;margin-bottom:.9rem;font-weight:600;color:var(--cream)}
 .ctotal span:last-child{color:var(--gold);font-size:1.05rem}
 
-/* ── ORANGE MONEY ── */
 .om-box{background:linear-gradient(135deg,#ff6600,#ff8c00);border-radius:10px;padding:.9rem 1.1rem;margin-bottom:1rem;display:flex;align-items:center;gap:.8rem}
 .om-info{flex:1}
 .om-title{font-weight:700;color:#fff;font-size:.88rem;margin-bottom:.1rem}
@@ -375,7 +378,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .sn{background:var(--om);color:#fff;border-radius:50%;width:19px;height:19px;font-size:.67rem;font-weight:700;flex-shrink:0;display:flex;align-items:center;justify-content:center;margin-top:.1rem}
 .step strong{color:var(--text)}
 
-/* ── STATES / STATUS ── */
 .empty{text-align:center;padding:5rem 1rem;color:var(--muted)}
 .loading-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:1rem;color:var(--muted)}
 .loading-screen .big{font-size:2.5rem}
@@ -386,13 +388,14 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .status-approved{background:rgba(39,174,96,.15);color:var(--green);border:1px solid rgba(39,174,96,.3)}
 .status-rejected{background:rgba(192,57,43,.15);color:#f08080;border:1px solid rgba(192,57,43,.3)}
 
-/* ── TOAST ── */
 .toast{position:fixed;bottom:1.8rem;left:50%;transform:translateX(-50%);background:var(--s2);border:1px solid var(--bd);color:var(--text);padding:.6rem 1.3rem;border-radius:8px;font-size:.82rem;z-index:600;animation:tin .25s ease;box-shadow:0 8px 28px rgba(0,0,0,.45);white-space:nowrap;pointer-events:none}
 .toast.ok{border-color:var(--green);color:#6fcf97}
 .toast.er{border-color:var(--red);color:#f08080}
 @keyframes tin{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 
-/* ── PENDING / CHECK PAGES ── */
+/* ── Badge téléchargement en cours ── */
+.dl-spinner{display:inline-flex;align-items:center;gap:.4rem;font-size:.8rem;color:var(--gold);padding:.35rem .7rem;background:rgba(201,150,58,.08);border:1px solid rgba(201,150,58,.2);border-radius:6px}
+
 .pending-page{max-width:460px;margin:3rem auto;padding:0 1.5rem;text-align:center}
 .pending-page .big-icon{font-size:3.5rem;margin-bottom:.9rem}
 .pending-page h2{font-family:'Playfair Display',serif;font-size:1.8rem;color:var(--cream);margin-bottom:.6rem}
@@ -408,7 +411,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .copy-sum{background:var(--s2);border:1px solid var(--bd);color:var(--muted);padding:.28rem .7rem;border-radius:6px;font-size:.72rem;cursor:pointer;transition:all .18s;font-family:'DM Sans'}
 .copy-sum:hover{border-color:var(--gold);color:var(--gold)}
 
-/* ── ADMIN ── */
 .admin-tabs{display:flex;gap:.5rem;border-bottom:1px solid var(--bd);margin-bottom:1.6rem;overflow-x:auto;scrollbar-width:none}
 .admin-tabs::-webkit-scrollbar{display:none}
 .tab{background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);padding:.52rem .88rem;cursor:pointer;font-family:'DM Sans';font-size:.82rem;font-weight:500;transition:all .18s;margin-bottom:-1px;white-space:nowrap}
@@ -424,35 +426,30 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .search-input{width:100%;background:var(--s2);border:1px solid var(--bd);color:var(--text);padding:.58rem .82rem;border-radius:7px;font-family:'DM Sans';font-size:.84rem;outline:none;margin-bottom:1.1rem;transition:border-color .2s}
 .search-input:focus{border-color:var(--gold)}
 
-/* ── STATS DASHBOARD ── */
 .stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:.9rem;margin-bottom:1.8rem}
 .stat-card{background:var(--s1);border:1px solid var(--bd);border-radius:10px;padding:1rem .9rem;text-align:center;transition:border-color .2s}
-.stat-card:hover{border-color:var(--bd)}
 .stat-icon{font-size:1.4rem;margin-bottom:.4rem}
 .stat-val{font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;color:var(--gold);margin-bottom:.2rem;line-height:1.1}
 .stat-lbl{font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 .top-book-row{display:flex;align-items:center;gap:.8rem;padding:.6rem .9rem;background:var(--s1);border:1px solid var(--bd);border-radius:8px;margin-bottom:.6rem}
 
-/* ── PROMO CODES ── */
 .promo-code-row{background:var(--s1);border:1px solid var(--bd);border-radius:9px;padding:.8rem 1rem;margin-bottom:.7rem;display:flex;align-items:center;gap:.8rem;flex-wrap:wrap}
 .promo-code-label{font-family:monospace;font-size:1rem;font-weight:700;min-width:80px}
 .promo-form{background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:1.2rem;margin-bottom:1.5rem}
 
-/* ── DETAIL MODAL ── */
 .detail-cover{width:120px;flex-shrink:0;aspect-ratio:3/4;border-radius:8px;overflow:hidden;border:1px solid var(--bd);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:2.5rem}
 .detail-cover img{width:100%;height:100%;object-fit:cover;object-position:top}
 .detail-title{font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:800;color:var(--cream);line-height:1.2;margin-bottom:.4rem}
-.detail-author{color:var(--muted);font-size:.84rem;margin-bottom:.6rem}
+.detail-author{color:var(--muted);font-size:.84rem;margin-bottom:.4rem}
+.detail-pages{font-size:.76rem;color:rgba(201,150,58,.75);margin-bottom:.5rem;display:flex;align-items:center;gap:.3rem}
 .detail-price{color:var(--gold);font-size:1.4rem;font-weight:700;margin-bottom:.9rem}
 .detail-desc{background:var(--s2);border-radius:8px;padding:.9rem 1rem;font-size:.84rem;color:var(--muted);line-height:1.75;margin-top:.9rem}
 
-/* ── WHATSAPP FAB ── */
 .wa-fab{position:fixed;bottom:1.5rem;right:1.5rem;background:#25D366;border:none;border-radius:50%;width:52px;height:52px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,.45);z-index:150;font-size:1.5rem;transition:transform .2s,box-shadow .2s;text-decoration:none}
 .wa-fab:hover{transform:scale(1.1);box-shadow:0 6px 28px rgba(37,211,102,.4)}
 .wa-tooltip{position:absolute;right:calc(100% + .6rem);background:var(--s1);border:1px solid var(--bd);color:var(--text);padding:.3rem .7rem;border-radius:6px;font-size:.74rem;white-space:nowrap;opacity:0;transition:opacity .2s;pointer-events:none}
 .wa-fab:hover .wa-tooltip{opacity:1}
 
-/* ── MISC ── */
 hr.div{border:none;border-top:1px solid var(--bd);margin:1rem 0}
 @media(max-width:480px){
   .nav{padding:0 .9rem;height:55px}
@@ -491,42 +488,48 @@ export default function App() {
   const [orderSearch, setOrderSearch] = useState("");
 
   // ── Modals ──
-  const [modal,          setModal]         = useState(null);
-  const [detailBook,     setDetailBook]    = useState(null);
-  const [editB,          setEditB]         = useState(null);
-  const [toast,          setToast]         = useState(null);
+  const [modal,       setModal]       = useState(null);
+  const [detailBook,  setDetailBook]  = useState(null);
+  const [editB,       setEditB]       = useState(null);
+  const [toast,       setToast]       = useState(null);
 
   // ── Login ──
-  const [loginPass, setLoginPass] = useState("");
-  const [loginErr,  setLoginErr]  = useState("");
+  const [loginPass,   setLoginPass]   = useState("");
+  const [loginErr,    setLoginErr]    = useState("");
 
   // ── Book form ──
   const emptyF = { title:"", author:"", cat:"Roman", price:"", num:"", desc:"", stock:99, emoji:"📚" };
-  const [form,          setForm]          = useState(emptyF);
-  const [formErr,       setFormErr]       = useState("");
-  const [formFieldErrs, setFormFieldErrs] = useState({});
-  const [aiLoading,     setAiLoading]     = useState(false);
-  const [uploadedFile,  setUploadedFile]  = useState(null);
-  const [extractedCover,setExtractedCover]= useState(null);
+  const [form,           setForm]           = useState(emptyF);
+  const [formErr,        setFormErr]        = useState("");
+  const [formFieldErrs,  setFormFieldErrs]  = useState({});
+  const [aiLoading,      setAiLoading]      = useState(false);
+  const [uploadedFile,   setUploadedFile]   = useState(null);
+  const [extractedCover, setExtractedCover] = useState(null);
+  // ✨ NOUVEAU — nombre de pages extrait par PDF.js
+  const [pageCount,      setPageCount]      = useState(null);
+
+  // ── Téléchargement en cours ──
+  const [downloadingKey, setDownloadingKey] = useState(null);
 
   // ── Checkout ──
-  const [checkF, setCheckF]       = useState({ name:"", phone:"", txId:"", pin:"" });
-  const [checkErrs, setCheckErrs] = useState({});
-  const [promoInput, setPromoInput] = useState("");
+  const [checkF,       setCheckF]       = useState({ name:"", phone:"", txId:"", pin:"" });
+  const [checkErrs,    setCheckErrs]    = useState({});
+  const [promoInput,   setPromoInput]   = useState("");
   const [appliedPromo, setAppliedPromo] = useState(null);
   const [pendingOrder, setPendingOrder] = useState(null);
 
-  // ── My orders ──
-  const [checkPhone,      setCheckPhone]      = useState("");
-  const [checkPin,        setCheckPin]        = useState("");
-  const [myOrders,        setMyOrders]        = useState(null);
-  const [checkingOrders,  setCheckingOrders]  = useState(false);
+  // ── Mes commandes ──
+  const [checkPhone,     setCheckPhone]     = useState("");
+  const [checkPin,       setCheckPin]       = useState("");
+  const [myOrders,       setMyOrders]       = useState(null);
+  const [checkingOrders, setCheckingOrders] = useState(false);
 
   // ── Promo form (admin) ──
   const emptyPromo = { code:"", discount:"", type:"percent", maxUses:"100" };
   const [promoForm, setPromoForm] = useState(emptyPromo);
 
-  // ─── Firebase: books ───────────────────────────────────────
+  // ─── Firebase: livres (métadonnées uniquement — sans fileData) ─────────────
+  // ✨ Le catalogue est ultra-rapide car les PDFs sont stockés dans /book-files/
   useEffect(() => {
     const unsub = onValue(ref(db,"books"), snap => {
       const data = snap.val();
@@ -536,7 +539,7 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // ─── Firebase: orders (admin only) ────────────────────────
+  // ─── Firebase: commandes (admin uniquement) ────────────────────────────────
   useEffect(() => {
     if (!isAdmin) return;
     const unsub = onValue(ref(db,"orders"), snap => {
@@ -546,7 +549,7 @@ export default function App() {
     return () => unsub();
   }, [isAdmin]);
 
-  // ─── Firebase: promo codes ─────────────────────────────────
+  // ─── Firebase: codes promo ────────────────────────────────────────────────
   useEffect(() => {
     const unsub = onValue(ref(db,"promoCodes"), snap => {
       const data = snap.val();
@@ -555,14 +558,13 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // ─── Keyboard: Escape ferme modals ────────────────────────
+  // ─── Keyboard: Escape ferme modals ────────────────────────────────────────
   useEffect(() => {
     const h = e => { if (e.key==="Escape") { setModal(null); setCartOpen(false); } };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
   }, []);
 
-  // ─── Scroll to top on view change ─────────────────────────
   useEffect(() => { window.scrollTo({top:0,behavior:"smooth"}); }, [view]);
 
   // ── helpers internes ──
@@ -576,14 +578,14 @@ export default function App() {
     });
   };
 
-  // ─── Catalogue filtré + trié ───────────────────────────────
+  // ─── Catalogue filtré + trié ──────────────────────────────────────────────
   const filtered = (() => {
     const q = search.toLowerCase();
     let res = books.filter(b => {
       const matchQ = !q || b.title?.toLowerCase().includes(q) || b.author?.toLowerCase().includes(q) || b.cat?.toLowerCase().includes(q);
       let matchCat = true;
-      if (activeCat === "__wish__") matchCat = wishlist.includes(b.fbKey);
-      else if (activeCat === "__new__") matchCat = isNew7d(b.createdAt);
+      if (activeCat === "__wish__")  matchCat = wishlist.includes(b.fbKey);
+      else if (activeCat === "__new__")  matchCat = isNew7d(b.createdAt);
       else if (activeCat === "__feat__") matchCat = !!b.featured;
       else if (activeCat) matchCat = b.cat === activeCat;
       return matchQ && matchCat;
@@ -602,16 +604,16 @@ export default function App() {
 
   const pendingCount = adminOrders.filter(o=>o.status==="pending").length;
 
-  // ─── Panier ───────────────────────────────────────────────
+  // ─── Panier ───────────────────────────────────────────────────────────────
   const addCart = b => {
     setCart(p => { const ex=p.find(i=>i.fbKey===b.fbKey); return ex?p.map(i=>i.fbKey===b.fbKey?{...i,qty:i.qty+1}:i):[...p,{...b,qty:1}]; });
     toast$(`"${b.title}" ajouté ✓`);
   };
-  const updQ   = (k,d) => setCart(p=>p.map(i=>i.fbKey===k?{...i,qty:Math.max(1,i.qty+d)}:i));
+  const updQ    = (k,d) => setCart(p=>p.map(i=>i.fbKey===k?{...i,qty:Math.max(1,i.qty+d)}:i));
   const remCart = k => setCart(p=>p.filter(i=>i.fbKey!==k));
   const copyOM  = () => { navigator.clipboard.writeText(OM_NUMBER).catch(()=>{}); toast$("Numéro copié 📋"); };
 
-  // ─── Admin login ──────────────────────────────────────────
+  // ─── Admin login ──────────────────────────────────────────────────────────
   const doLogin = () => {
     if (loginPass===ADMIN_PASSWORD) {
       setIsAdmin(true); saveSession();
@@ -628,12 +630,13 @@ export default function App() {
     setView("home"); toast$("Déconnecté","er");
   };
 
-  // ─── Formulaire livre ─────────────────────────────────────
-  const openAdd  = () => { setForm(emptyF); setUploadedFile(null); setExtractedCover(null); setFormErr(""); setFormFieldErrs({}); setModal("add"); };
+  // ─── Formulaire livre ─────────────────────────────────────────────────────
+  const openAdd  = () => { setForm(emptyF); setUploadedFile(null); setExtractedCover(null); setPageCount(null); setFormErr(""); setFormFieldErrs({}); setModal("add"); };
   const openEdit = b => {
     setEditB(b);
     setForm({title:b.title,author:b.author,cat:b.cat,price:b.price,num:b.num,desc:b.desc||"",stock:b.stock,emoji:b.emoji||"📚"});
-    setUploadedFile(null); setExtractedCover(b.coverImage||null); setFormErr(""); setFormFieldErrs({}); setModal("edit");
+    setUploadedFile(null); setExtractedCover(b.coverImage||null); setPageCount(b.pageCount||null);
+    setFormErr(""); setFormFieldErrs({}); setModal("edit");
   };
 
   const chForm = e => {
@@ -649,6 +652,7 @@ export default function App() {
     setAiLoading(false);
   };
 
+  // ✨ Upload PDF : extraction couverture + nb pages + analyse IA en parallèle
   const handleFileChange = async e => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -657,8 +661,13 @@ export default function App() {
     setUploadedFile({name:file.name,size:(file.size/1024).toFixed(0)+" Ko",b64,type:file.type});
     if (file.type==="application/pdf") {
       setAiLoading(true); toast$("🤖 IA analyse le PDF…");
-      const [cover, analysis] = await Promise.all([extractPDFCover(b64), analyzeBookPDF(b64)]);
-      if (cover) setExtractedCover(cover);
+      const [cover, pages, analysis] = await Promise.all([
+        extractPDFCover(b64),
+        extractPDFPageCount(b64),   // ✨ comptage des pages
+        analyzeBookPDF(b64),
+      ]);
+      if (cover)  setExtractedCover(cover);
+      if (pages)  setPageCount(pages);       // ✨ stocké dans le state
       if (analysis.title||analysis.author||analysis.desc) {
         setForm(p=>({...p,
           title:  analysis.title  || p.title,
@@ -667,68 +676,92 @@ export default function App() {
           desc:   analysis.desc   || p.desc,
         }));
       }
-      setAiLoading(false); toast$("✅ IA terminée — vérifiez les champs");
+      setAiLoading(false); toast$(`✅ IA terminée${pages?` — ${pages} pages détectées`:""}`);
     }
   };
 
+  // ─── Sauvegarde livre ─────────────────────────────────────────────────────
+  // ✨ ARCHITECTURE CLÉE : les métadonnées vont dans /books/{key}
+  //    Le fichier PDF/EPUB va dans /book-files/{key} — séparé → catalogue rapide
   const saveBook = async () => {
     const errs = {};
-    if (!form.title.trim())  errs.title  = "Titre requis";
-    if (!form.author.trim()) errs.author = "Auteur requis";
-    if (!form.num||isNaN(form.num)) errs.num = "Prix requis";
+    if (!form.title.trim())       errs.title  = "Titre requis";
+    if (!form.author.trim())      errs.author = "Auteur requis";
+    if (!form.num||isNaN(form.num)) errs.num  = "Prix requis";
     if (Object.keys(errs).length) { setFormFieldErrs(errs); return; }
 
+    // Métadonnées uniquement — PAS de fileData ici
     const bookData = {
       title:sanitize(form.title), author:sanitize(form.author), cat:form.cat, emoji:form.emoji,
       price:form.price||`${Number(form.num).toLocaleString("fr-FR")} GNF`,
       num:Number(form.num), desc:sanitize(form.desc), stock:Number(form.stock)||99,
-      hasFile:uploadedFile?true:(editB?.hasFile||false),
-      coverImage:extractedCover||editB?.coverImage||null,
-      featured:editB?.featured||false,
-      createdAt:modal==="add"?Date.now():(editB?.createdAt||Date.now()),
+      hasFile: uploadedFile ? true : (editB?.hasFile || false),
+      coverImage: extractedCover || editB?.coverImage || null,
+      pageCount: pageCount || editB?.pageCount || null,   // ✨ nb de pages
+      featured: editB?.featured || false,
+      createdAt: modal==="add" ? Date.now() : (editB?.createdAt || Date.now()),
     };
-    if (uploadedFile)                          { bookData.fileData=uploadedFile.b64; bookData.fileName=uploadedFile.name; bookData.fileType=uploadedFile.type; }
-    else if (modal==="edit"&&editB?.fileData)  { bookData.fileData=editB.fileData; bookData.fileName=editB.fileName; bookData.fileType=editB.fileType; }
 
     try {
-      if (modal==="add") { await push(ref(db,"books"),bookData); toast$(`"${form.title}" publié ✓`); }
-      else               { await update(ref(db,`books/${editB.fbKey}`),bookData); toast$(`"${form.title}" mis à jour ✓`); }
+      let bookKey;
+      if (modal==="add") {
+        const newRef = await push(ref(db,"books"), bookData);
+        bookKey = newRef.key;
+        toast$(`"${form.title}" publié ✓`);
+      } else {
+        await update(ref(db,`books/${editB.fbKey}`), bookData);
+        bookKey = editB.fbKey;
+        toast$(`"${form.title}" mis à jour ✓`);
+      }
+
+      // ✨ Si nouveau fichier uploadé → le stocker séparément dans /book-files/
+      if (uploadedFile) {
+        await set(ref(db,`book-files/${bookKey}`), {
+          fileData: uploadedFile.b64,
+          fileName: uploadedFile.name,
+          fileType: uploadedFile.type,
+        });
+      }
+
       setModal(null);
     } catch(err) { toast$("Erreur Firebase : "+err.message,"er"); }
   };
 
   const delBook    = b => { setEditB(b); setModal("del"); };
-  const confirmDel = async () => { await remove(ref(db,`books/${editB.fbKey}`)); toast$("Livre supprimé","er"); setModal(null); };
+  const confirmDel = async () => {
+    await remove(ref(db,`books/${editB.fbKey}`));
+    // Supprimer aussi le fichier associé s'il existe
+    try { await remove(ref(db,`book-files/${editB.fbKey}`)); } catch {}
+    toast$("Livre supprimé","er"); setModal(null);
+  };
 
   const toggleFeatured = async b => {
     await update(ref(db,`books/${b.fbKey}`), {featured:!b.featured});
     toast$(b.featured?"Retiré des mis en avant":"⭐ Mis en avant");
   };
 
-  // ─── Checkout ─────────────────────────────────────────────
+  // ─── Checkout ─────────────────────────────────────────────────────────────
   const applyPromo = () => {
     const code = promoCodes.find(p => p.active && p.code.toUpperCase()===promoInput.trim().toUpperCase());
-    if (!code)                              { toast$("Code promo invalide ou inactif","er"); return; }
-    if (code.maxUses && (code.uses||0)>=code.maxUses) { toast$("Ce code promo a expiré","er"); return; }
+    if (!code)                                              { toast$("Code promo invalide ou inactif","er"); return; }
+    if (code.maxUses && (code.uses||0)>=code.maxUses)      { toast$("Ce code promo a expiré","er"); return; }
     setAppliedPromo(code);
     toast$(`Code "${code.code}" appliqué — ${code.type==="percent"?code.discount+"%":fmtGNF(code.discount)} de réduction ✓`);
   };
 
   const doCheckout = async () => {
-    // validation
     const errs = {};
-    if (!checkF.name.trim())                         errs.name  = "Nom requis";
-    if (!checkF.phone.trim())                        errs.phone = "Téléphone requis";
-    else if (!validPhone(checkF.phone))              errs.phone = "Format invalide (9–15 chiffres)";
-    if (!checkF.txId.trim())                         errs.txId  = "N° transaction requis";
-    else if (!validTx(checkF.txId))                  errs.txId  = "Minimum 4 caractères";
-    if (!/^\d{4}$/.test(checkF.pin))                 errs.pin   = "PIN à 4 chiffres requis";
+    if (!checkF.name.trim())                    errs.name  = "Nom requis";
+    if (!checkF.phone.trim())                   errs.phone = "Téléphone requis";
+    else if (!validPhone(checkF.phone))         errs.phone = "Format invalide (9–15 chiffres)";
+    if (!checkF.txId.trim())                    errs.txId  = "N° transaction requis";
+    else if (!validTx(checkF.txId))             errs.txId  = "Minimum 4 caractères";
+    if (!/^\d{4}$/.test(checkF.pin))            errs.pin   = "PIN à 4 chiffres requis";
     if (Object.keys(errs).length) { setCheckErrs(errs); return; }
 
-    // Rate limit
     if (!canOrder()) { toast$("Trop de tentatives — réessayez dans 10 minutes","er"); return; }
 
-    // Vérification txId dupliqué
+    // Vérification doublon txId
     try {
       const snap = await get(ref(db,"orders"));
       const data = snap.val();
@@ -750,7 +783,6 @@ export default function App() {
 
     try {
       const newRef = await push(ref(db,"orders"), orderData);
-      // Incrémenter le compteur du code promo
       if (appliedPromo) {
         await update(ref(db,`promoCodes/${appliedPromo.fbKey}`), {uses:(appliedPromo.uses||0)+1});
       }
@@ -764,11 +796,11 @@ export default function App() {
     } catch(err) { toast$("Erreur : "+err.message,"er"); }
   };
 
-  // ─── Mes commandes (client) ───────────────────────────────
+  // ─── Mes commandes ────────────────────────────────────────────────────────
   const checkMyOrders = async () => {
     const errs = {};
-    if (!checkPhone.trim())              errs.phone = "Téléphone requis";
-    if (!/^\d{4}$/.test(checkPin))       errs.pin   = "PIN à 4 chiffres";
+    if (!checkPhone.trim())        errs.phone = "Téléphone requis";
+    if (!/^\d{4}$/.test(checkPin)) errs.pin   = "PIN à 4 chiffres";
     if (Object.keys(errs).length) { toast$(Object.values(errs)[0],"er"); return; }
     setCheckingOrders(true);
     try {
@@ -785,7 +817,7 @@ export default function App() {
     setCheckingOrders(false);
   };
 
-  // ─── Admin: statut commande ────────────────────────────────
+  // ─── Admin: statut commande ───────────────────────────────────────────────
   const setOrderStatus = async (fbKey, status) => {
     try {
       await update(ref(db,`orders/${fbKey}`), {status, reviewedAt:Date.now()});
@@ -793,7 +825,7 @@ export default function App() {
     } catch(err) { toast$("Erreur : "+err.message,"er"); }
   };
 
-  // ─── Admin: promo codes ────────────────────────────────────
+  // ─── Admin: promo codes ───────────────────────────────────────────────────
   const addPromoCode = async () => {
     if (!promoForm.code.trim()||!promoForm.discount) { toast$("Code et réduction requis","er"); return; }
     const existing = promoCodes.find(p=>p.code.toUpperCase()===promoForm.code.trim().toUpperCase());
@@ -818,16 +850,63 @@ export default function App() {
     toast$("Code supprimé","er");
   };
 
-  // ─── Téléchargement ───────────────────────────────────────
-  const downloadBook = book => {
-    if (!book?.fileData) { toast$("Fichier non disponible","er"); return; }
-    const a=document.createElement("a"); a.href=book.fileData; a.download=book.fileName||book.title; a.click();
-    toast$("Téléchargement lancé ✓");
+  // ─── ✨ Téléchargement — PDF récupéré UNIQUEMENT au moment du download ─────
+  // Le fichier n'est jamais chargé lors de l'affichage du catalogue.
+  // Il est récupéré depuis /book-files/{fbKey} à la demande, après paiement confirmé.
+  const downloadBook = async (book) => {
+    setDownloadingKey(book.fbKey);
+    try {
+      // 1. Essai dans /book-files/ (nouvelle architecture)
+      const snap = await get(ref(db,`book-files/${book.fbKey}`));
+      if (snap.exists()) {
+        const { fileData, fileName } = snap.val();
+        const a = document.createElement("a");
+        a.href = fileData;
+        a.download = fileName || book.title;
+        a.click();
+        toast$("Téléchargement lancé ✓");
+        setDownloadingKey(null);
+        return;
+      }
+      // 2. Fallback — ancienne architecture (fileData dans /books/)
+      const bookSnap = await get(ref(db,`books/${book.fbKey}`));
+      const bookData = bookSnap.val();
+      if (bookData?.fileData) {
+        const a = document.createElement("a");
+        a.href = bookData.fileData;
+        a.download = bookData.fileName || book.title;
+        a.click();
+        toast$("Téléchargement lancé ✓");
+        setDownloadingKey(null);
+        return;
+      }
+      toast$("Fichier non disponible pour le moment","er");
+    } catch(err) {
+      toast$("Erreur lors du téléchargement","er");
+    }
+    setDownloadingKey(null);
   };
-  const readOnline = book => {
-    if (!book?.fileData) { toast$("Fichier non disponible","er"); return; }
-    const w=window.open();
-    if(w){w.document.write(`<iframe src="${book.fileData}" style="width:100%;height:100%;border:none"></iframe>`);w.document.close();}
+
+  const readOnline = async (book) => {
+    setDownloadingKey(book.fbKey);
+    try {
+      const snap = await get(ref(db,`book-files/${book.fbKey}`));
+      let fileData = null;
+      if (snap.exists()) {
+        fileData = snap.val().fileData;
+      } else {
+        // Fallback ancienne architecture
+        const bookSnap = await get(ref(db,`books/${book.fbKey}`));
+        fileData = bookSnap.val()?.fileData || null;
+      }
+      if (fileData) {
+        const w = window.open();
+        if (w) { w.document.write(`<iframe src="${fileData}" style="width:100%;height:100%;border:none"></iframe>`); w.document.close(); }
+      } else {
+        toast$("Fichier non disponible pour le moment","er");
+      }
+    } catch { toast$("Erreur lors du chargement","er"); }
+    setDownloadingKey(null);
   };
 
   const copyOrderSummary = order => {
@@ -836,7 +915,7 @@ export default function App() {
     toast$("Résumé copié 📋");
   };
 
-  // ─── Stats admin ──────────────────────────────────────────
+  // ─── Stats admin ──────────────────────────────────────────────────────────
   const statsData = (() => {
     const approved = adminOrders.filter(o=>o.status==="approved");
     const pending  = adminOrders.filter(o=>o.status==="pending");
@@ -853,29 +932,21 @@ export default function App() {
     return {approved:approved.length,pending:pending.length,rejected:rejected.length,totalRevenue,monthRevenue,topBooks};
   })();
 
-  const filteredOrders = adminOrders.filter(o=>{
-    const q=orderSearch.toLowerCase();
-    return !q||o.name?.toLowerCase().includes(q)||o.phone?.includes(q)||o.txId?.toLowerCase().includes(q);
-  });
-  const filteredAdminBooks = books.filter(b=>{
-    const q=adminSearch.toLowerCase();
-    return !q||b.title?.toLowerCase().includes(q)||b.author?.toLowerCase().includes(q);
-  });
+  const filteredOrders      = adminOrders.filter(o=>{ const q=orderSearch.toLowerCase(); return !q||o.name?.toLowerCase().includes(q)||o.phone?.includes(q)||o.txId?.toLowerCase().includes(q); });
+  const filteredAdminBooks  = books.filter(b=>{ const q=adminSearch.toLowerCase(); return !q||b.title?.toLowerCase().includes(q)||b.author?.toLowerCase().includes(q); });
 
   // ─────────────────────────────────────────────────────────────
   // COMPOSANT CARTE LIVRE
   // ─────────────────────────────────────────────────────────────
-  const BookCard = ({ b, admin, compact }) => (
+  const BookCard = ({ b, admin }) => (
     <div className="card" onClick={() => { setDetailBook(b); setModal("detail"); }}>
       <div className="card-cover">
         {b.coverImage
           ? <><img src={b.coverImage} alt={b.title} className="card-cover-img"/><div className="card-cover-overlay"/></>
           : <><span className="emo">{b.emoji||"📚"}</span><span className="init">{b.title?.[0]}</span></>}
-        {/* Badges */}
         {b.featured && !isNew7d(b.createdAt) && <span className="featured-badge">⭐ Coup de cœur</span>}
         {isNew7d(b.createdAt) && <span className="new-badge">🆕 Nouveau</span>}
         {b.hasFile && <span className="has-file-badge">PDF ✓</span>}
-        {/* Wishlist btn */}
         <button className="wish-btn" onClick={e=>{e.stopPropagation();toggleWish(b.fbKey);}}>
           {wishlist.includes(b.fbKey)?"❤️":"🤍"}
         </button>
@@ -884,6 +955,13 @@ export default function App() {
         <div className="cat-tag">{CAT_ICONS[b.cat]||""} {b.cat}</div>
         <div className="title">{b.title}</div>
         <div className="author">{b.author}</div>
+        {/* ✨ NOUVEAU — nombre de pages */}
+        {b.pageCount && (
+          <div className="pages-info">
+            <span>📄</span>
+            <span>{b.pageCount} pages</span>
+          </div>
+        )}
         <div className="card-foot">
           <div>
             <div className="price">{b.price}</div>
@@ -949,9 +1027,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ════════════════════════════════════
-          VUE HOME
-      ════════════════════════════════════ */}
+      {/* ════════════════════════ VUE HOME ════════════════════════ */}
       {view==="home"&&<>
         <section className="hero">
           <p className="hero-tag">Librairie numérique · Conakry, Guinée</p>
@@ -971,7 +1047,6 @@ export default function App() {
           </div>
         </section>
 
-        {/* Section livres mis en avant */}
         {featuredBooks.length>0 && !search && !activeCat && (
           <div className="featured-section">
             <div className="featured-title">⭐ Coups de cœur</div>
@@ -992,7 +1067,6 @@ export default function App() {
               <div className="grid-sub">{filtered.length} livre{filtered.length!==1?"s":""} disponible{filtered.length!==1?"s":""}</div>
             </div>
           </div>
-          {/* Tri */}
           <div className="sort-bar">
             <span className="sort-lbl">Tri :</span>
             {SORT_OPTS.map(s=>(
@@ -1015,9 +1089,7 @@ export default function App() {
         </div>
       </>}
 
-      {/* ════════════════════════════════════
-          VUE ADMIN
-      ════════════════════════════════════ */}
+      {/* ════════════════════════ VUE ADMIN ════════════════════════ */}
       {view==="admin"&&isAdmin&&(
         <div className="page">
           <div style={{display:"flex",alignItems:"center",gap:"1rem",marginBottom:"1.5rem",flexWrap:"wrap"}}>
@@ -1025,15 +1097,15 @@ export default function App() {
             <span style={{fontFamily:"'Playfair Display',serif",fontSize:"1.35rem",color:"var(--cream)"}}>Administration</span>
           </div>
           <div className="admin-tabs">
-            <button className={`tab ${adminTab==="stats"?"active":""}`}    onClick={()=>setAdminTab("stats")}>📊 Stats</button>
-            <button className={`tab ${adminTab==="books"?"active":""}`}    onClick={()=>setAdminTab("books")}>📚 Catalogue</button>
-            <button className={`tab ${adminTab==="orders"?"active":""}`}   onClick={()=>setAdminTab("orders")}>
+            <button className={`tab ${adminTab==="stats"?"active":""}`}  onClick={()=>setAdminTab("stats")}>📊 Stats</button>
+            <button className={`tab ${adminTab==="books"?"active":""}`}  onClick={()=>setAdminTab("books")}>📚 Catalogue</button>
+            <button className={`tab ${adminTab==="orders"?"active":""}`} onClick={()=>setAdminTab("orders")}>
               📦 Commandes{pendingCount>0&&<span className="badge" style={{marginLeft:".3rem"}}>{pendingCount}</span>}
             </button>
-            <button className={`tab ${adminTab==="promos"?"active":""}`}   onClick={()=>setAdminTab("promos")}>🏷️ Promos</button>
+            <button className={`tab ${adminTab==="promos"?"active":""}`} onClick={()=>setAdminTab("promos")}>🏷️ Promos</button>
           </div>
 
-          {/* ── STATS ── */}
+          {/* STATS */}
           {adminTab==="stats"&&<>
             <div className="stats-grid">
               {[
@@ -1072,7 +1144,7 @@ export default function App() {
             )}
           </>}
 
-          {/* ── CATALOGUE ── */}
+          {/* CATALOGUE */}
           {adminTab==="books"&&<>
             <div style={{display:"flex",gap:".7rem",marginBottom:"1.2rem",alignItems:"center",flexWrap:"wrap"}}>
               <button className="btn btn-gold" onClick={openAdd}>+ Nouveau livre</button>
@@ -1083,10 +1155,10 @@ export default function App() {
               :<div className="grid">{filteredAdminBooks.map(b=><BookCard key={b.fbKey} b={b} admin={true}/>)}</div>}
           </>}
 
-          {/* ── COMMANDES ── */}
+          {/* COMMANDES */}
           {adminTab==="orders"&&<>
             <div style={{display:"flex",gap:".7rem",marginBottom:"1rem",flexWrap:"wrap"}}>
-              <input className="search-input" style={{flex:1,marginBottom:0}} placeholder="Rechercher par nom, téléphone, ID transaction…" value={orderSearch} onChange={e=>setOrderSearch(e.target.value)}/>
+              <input className="search-input" style={{flex:1,marginBottom:0}} placeholder="Nom, téléphone, ID transaction…" value={orderSearch} onChange={e=>setOrderSearch(e.target.value)}/>
               <button className="btn btn-ghost btn-sm" onClick={()=>exportCSV(filteredOrders)}>📥 CSV</button>
             </div>
             {filteredOrders.length===0&&<div className="empty"><div style={{fontSize:"2rem",marginBottom:".5rem"}}>📭</div><p>Aucune commande</p></div>}
@@ -1130,7 +1202,7 @@ export default function App() {
             ))}
           </>}
 
-          {/* ── CODES PROMO ── */}
+          {/* CODES PROMO */}
           {adminTab==="promos"&&<>
             <div className="promo-form">
               <div style={{fontFamily:"'Playfair Display',serif",fontSize:"1.1rem",color:"var(--cream)",marginBottom:"1rem"}}>🏷️ Créer un code promo</div>
@@ -1162,7 +1234,6 @@ export default function App() {
               </div>
               <button className="btn btn-gold" onClick={addPromoCode}>+ Créer le code</button>
             </div>
-
             {promoCodes.length===0&&<div className="empty"><p>Aucun code promo créé</p></div>}
             {[...promoCodes].sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(p=>(
               <div key={p.fbKey} className="promo-code-row">
@@ -1184,9 +1255,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ════════════════════════════════════
-          VUE PENDING
-      ════════════════════════════════════ */}
+      {/* ════════════════════════ VUE PENDING ════════════════════════ */}
       {view==="pending"&&pendingOrder&&(
         <div className="pending-page">
           <div className="big-icon">⏳</div>
@@ -1213,9 +1282,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ════════════════════════════════════
-          VUE MES COMMANDES
-      ════════════════════════════════════ */}
+      {/* ════════════════════════ VUE MES COMMANDES ════════════════════════ */}
       {view==="check"&&(
         <div className="check-page">
           <div style={{textAlign:"center",marginBottom:"1.5rem"}}>
@@ -1252,20 +1319,24 @@ export default function App() {
                 {fmtGNF(order.total)}
                 {order.promoCode&&<span style={{fontSize:".72rem",color:"var(--green)",marginLeft:".5rem"}}>🏷️ -{fmtGNF(order.discount||0)}</span>}
               </div>
+              {/* ✨ Téléchargement uniquement si commande approuvée */}
               {order.status==="approved"&&(
                 <div>
                   <div style={{fontSize:".74rem",color:"var(--green)",marginBottom:".6rem"}}>✅ Paiement confirmé — accès activé</div>
                   {(order.items||[]).map((it,i)=>{
                     const book=books.find(b=>b.fbKey===it.fbKey);
+                    const isDling = downloadingKey===it.fbKey;
                     return (
                       <div key={i} style={{marginBottom:".5rem"}}>
                         <div style={{fontSize:".79rem",color:"var(--text)",marginBottom:".3rem"}}>{it.emoji||"📚"} {it.title}</div>
                         {book?.hasFile
-                          ?<div className="dl-formats">
-                            <button className="btn btn-green btn-sm" onClick={()=>downloadBook(book)}>⬇️ Télécharger</button>
-                            <button className="btn btn-outline btn-sm" onClick={()=>readOnline(book)}>👁️ Lire en ligne</button>
-                          </div>
-                          :<p style={{color:"var(--muted)",fontSize:".74rem"}}>⏳ Fichier pas encore disponible.</p>}
+                          ? isDling
+                            ? <div className="dl-spinner"><span className="spin">⚙️</span> Chargement du fichier…</div>
+                            : <div className="dl-formats">
+                                <button className="btn btn-green btn-sm" onClick={()=>downloadBook(book)}>⬇️ Télécharger</button>
+                                <button className="btn btn-outline btn-sm" onClick={()=>readOnline(book)}>👁️ Lire en ligne</button>
+                              </div>
+                          : <p style={{color:"var(--muted)",fontSize:".74rem"}}>⏳ Fichier pas encore disponible.</p>}
                       </div>
                     );
                   })}
@@ -1288,9 +1359,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ════════════════════════════════════
-          PANIER (sidebar)
-      ════════════════════════════════════ */}
+      {/* ════════════════════════ PANIER (sidebar) ════════════════════════ */}
       {cartOpen&&<div className="co" onClick={()=>setCartOpen(false)}/>}
       <div className={`cart-side ${cartOpen?"open":""}`}>
         <div className="ch">
@@ -1327,13 +1396,11 @@ export default function App() {
         )}
       </div>
 
-      {/* ════════════════════════════════════
-          MODALS
-      ════════════════════════════════════ */}
+      {/* ════════════════════════ MODALS ════════════════════════ */}
       {modal&&(
         <div className="overlay" onClick={e=>{ if(e.target===e.currentTarget) setModal(null); }}>
 
-          {/* ── LOGIN ── */}
+          {/* LOGIN */}
           {modal==="login"&&(
             <div className="modal" style={{maxWidth:340}}>
               <button className="mc" onClick={()=>setModal(null)}>✕</button>
@@ -1352,7 +1419,7 @@ export default function App() {
             </div>
           )}
 
-          {/* ── DETAIL LIVRE ── */}
+          {/* DETAIL LIVRE */}
           {modal==="detail"&&detailBook&&(
             <div className="modal" style={{maxWidth:560}}>
               <button className="mc" onClick={()=>setModal(null)}>✕</button>
@@ -1367,6 +1434,13 @@ export default function App() {
                   {isNew7d(detailBook.createdAt)&&<span style={{background:"var(--om)",color:"#fff",fontSize:".62rem",fontWeight:700,padding:".12rem .4rem",borderRadius:4,marginBottom:".5rem",display:"inline-block"}}>🆕 NOUVEAU</span>}
                   <div className="detail-title">{detailBook.title}</div>
                   <div className="detail-author">{detailBook.author}</div>
+                  {/* ✨ Nombre de pages dans le modal détail */}
+                  {detailBook.pageCount&&(
+                    <div className="detail-pages">
+                      <span>📄</span>
+                      <span>{detailBook.pageCount} pages</span>
+                    </div>
+                  )}
                   <div className="detail-price">{detailBook.price}</div>
                   <div style={{display:"flex",gap:".5rem",flexWrap:"wrap"}}>
                     <button className="btn btn-gold" onClick={()=>{ addCart(detailBook); setModal(null); }}>🛒 Acheter</button>
@@ -1390,7 +1464,7 @@ export default function App() {
             </div>
           )}
 
-          {/* ── AJOUTER / MODIFIER LIVRE ── */}
+          {/* AJOUTER / MODIFIER LIVRE */}
           {(modal==="add"||modal==="edit")&&(
             <div className="modal">
               <button className="mc" onClick={()=>setModal(null)}>✕</button>
@@ -1409,13 +1483,19 @@ export default function App() {
                     <span>✅</span>
                     <span className="fname">{uploadedFile.name}</span>
                     <span className="fsize">{uploadedFile.size}</span>
-                    <button className="file-remove" onClick={()=>{ setUploadedFile(null); setExtractedCover(null); }}>✕</button>
+                    {/* ✨ Afficher nb pages directement dans le formulaire */}
+                    {pageCount&&<span style={{color:"var(--gold)",fontSize:".72rem",fontWeight:600}}>📄 {pageCount} p.</span>}
+                    <button className="file-remove" onClick={()=>{ setUploadedFile(null); setExtractedCover(null); setPageCount(null); }}>✕</button>
                   </div>
                 )}
-                {modal==="edit"&&editB?.hasFile&&!uploadedFile&&<p style={{fontSize:".7rem",color:"var(--green)",marginTop:".3rem"}}>✅ Fichier déjà associé.</p>}
+                {modal==="edit"&&editB?.hasFile&&!uploadedFile&&(
+                  <p style={{fontSize:".7rem",color:"var(--green)",marginTop:".3rem"}}>
+                    ✅ Fichier déjà associé{editB?.pageCount?` — ${editB.pageCount} pages`:""}
+                  </p>
+                )}
               </div>
 
-              {aiLoading&&<div className="ai-row"><span className="spin">⚙️</span> IA : extraction couverture + analyse…</div>}
+              {aiLoading&&<div className="ai-row"><span className="spin">⚙️</span> IA : extraction couverture + pages + analyse…</div>}
 
               {extractedCover&&!aiLoading&&(
                 <div className="ai-analysis-box">
@@ -1470,7 +1550,7 @@ export default function App() {
             </div>
           )}
 
-          {/* ── SUPPRIMER ── */}
+          {/* SUPPRIMER */}
           {modal==="del"&&(
             <div className="modal" style={{maxWidth:360}}>
               <h2>🗑️ Supprimer ?</h2>
@@ -1484,13 +1564,12 @@ export default function App() {
             </div>
           )}
 
-          {/* ── CHECKOUT ── */}
+          {/* CHECKOUT */}
           {modal==="checkout"&&(
             <div className="modal">
               <button className="mc" onClick={()=>setModal(null)}>✕</button>
               <h2>🛒 Commander</h2>
 
-              {/* Récap panier */}
               <div style={{background:"var(--s2)",border:"1px solid var(--bd)",borderRadius:8,padding:".7rem .9rem",marginBottom:"1rem"}}>
                 {cart.map(i=>(
                   <div key={i.fbKey} style={{display:"flex",justifyContent:"space-between",fontSize:".8rem",marginBottom:".25rem"}}>
@@ -1514,7 +1593,6 @@ export default function App() {
                 )}
               </div>
 
-              {/* Code promo */}
               {!appliedPromo?(
                 <div className="fg">
                   <label className="fl">Code promo (optionnel)</label>
@@ -1532,7 +1610,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* Orange Money */}
               <div className="om-box">
                 <span style={{fontSize:"1.7rem"}}>🟠</span>
                 <div className="om-info">
@@ -1587,14 +1664,14 @@ export default function App() {
         </div>
       )}
 
-      {/* ── BOUTON WHATSAPP FLOTTANT ── */}
+      {/* WHATSAPP FAB */}
       <a href={`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent("Bonjour, j'ai besoin d'aide avec ma commande Librairie YO.")}`}
         className="wa-fab" target="_blank" rel="noreferrer" title="Support WhatsApp">
         <div className="wa-tooltip">💬 Support WhatsApp</div>
         💬
       </a>
 
-      {/* ── TOAST ── */}
+      {/* TOAST */}
       {toast&&<div className={`toast ${toast.type}`}>{toast.msg}</div>}
     </>
   );
