@@ -30,7 +30,7 @@ const TELEGRAM_BOT_TOKEN = "VOTRE_BOT_TOKEN";
 const TELEGRAM_CHAT_ID   = "VOTRE_CHAT_ID";
 
 // ─────────────────────────────────────────────────────────────
-// CACHE LIVRES — affichage quasi-instantané au 2e chargement
+// CACHE LIVRES
 // ─────────────────────────────────────────────────────────────
 const BOOKS_CACHE_KEY = "yo_books_v2";
 
@@ -43,14 +43,13 @@ const loadCachedBooks = () => {
 
 const saveBooksCache = (books) => {
   try {
-    // On ne stocke que les champs légers (pas fileData qui pèse des Mo)
     const slim = books.map(({ fileData, ...rest }) => rest);
     localStorage.setItem(BOOKS_CACHE_KEY, JSON.stringify(slim));
   } catch {}
 };
 
 // ─────────────────────────────────────────────────────────────
-// SÉCURITÉ — Session admin (2h) + Rate limiter + Wishlist
+// SÉCURITÉ
 // ─────────────────────────────────────────────────────────────
 const SESSION_KEY = "yo_adm_sess";
 const SESSION_TTL = 7_200_000;
@@ -155,6 +154,64 @@ function exportCSV(orders) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// FORMATAGE DESCRIPTION — rend le format structuré joliment
+// ─────────────────────────────────────────────────────────────
+function FormatDesc({ text }) {
+  if (!text) return null;
+  const lines = text.split('\n');
+  return (
+    <div style={{lineHeight:1.75}}>
+      {lines.map((line, i) => {
+        if (!line.trim()) return <div key={i} style={{height:".45rem"}}/>;
+
+        // Titre (première ligne non vide)
+        if (i === 0 || (i <= 2 && !lines.slice(0,i).some(l=>l.trim()))) {
+          return (
+            <div key={i} style={{
+              fontFamily:"'Playfair Display',Georgia,serif",
+              fontWeight:800, fontSize:"1rem",
+              color:"var(--cream)", marginBottom:".15rem"
+            }}>{line}</div>
+          );
+        }
+        // Catégorie / Par auteur
+        if (line.startsWith("Catégorie :") || line.startsWith("Par ")) {
+          return <div key={i} style={{color:"var(--muted)",fontSize:".76rem",marginBottom:".1rem"}}>{line}</div>;
+        }
+        // Points bullet
+        if (line.startsWith("- ")) {
+          return (
+            <div key={i} style={{display:"flex",gap:".5rem",alignItems:"flex-start",marginBottom:".25rem",marginTop:".1rem"}}>
+              <span style={{color:"var(--gold)",fontWeight:700,marginTop:".05rem",flexShrink:0}}>▸</span>
+              <span style={{color:"var(--text)",fontSize:".84rem"}}>{line.slice(2)}</span>
+            </div>
+          );
+        }
+        // Idée clé
+        if (line.startsWith("Idée clé :")) {
+          return (
+            <div key={i} style={{
+              background:"rgba(201,150,58,.1)",
+              border:"1px solid rgba(201,150,58,.25)",
+              borderRadius:7, padding:".5rem .8rem",
+              marginTop:".5rem", color:"var(--gold)",
+              fontStyle:"italic", fontSize:".82rem",
+              lineHeight:1.5
+            }}>{line}</div>
+          );
+        }
+        // Phrase accrocheuse (ligne normale après "Par...")
+        return (
+          <div key={i} style={{color:"var(--text)",fontSize:".86rem",marginBottom:".2rem",marginTop:".3rem"}}>
+            {line}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // IA / PDF
 // ─────────────────────────────────────────────────────────────
 function readFileAsBase64(file) {
@@ -171,63 +228,115 @@ async function loadPDFJS() {
   });
 }
 
-async function extractPDFCover(b64DataUrl) {
+// Extrait la couverture ET le nombre de pages réel du PDF
+async function extractPDFInfo(b64DataUrl) {
   try {
-    const pdfjs=await loadPDFJS();
-    const raw=atob(b64DataUrl.split(",")[1]);
-    const bytes=new Uint8Array(raw.length);
-    for(let i=0;i<raw.length;i++) bytes[i]=raw.charCodeAt(i);
-    const pdf=await pdfjs.getDocument({data:bytes}).promise;
-    const page=await pdf.getPage(1);
-    const vp0=page.getViewport({scale:1});
-    const scale=Math.min(320/vp0.width,480/vp0.height);
-    const vp=page.getViewport({scale});
-    const canvas=document.createElement("canvas");
-    canvas.width=vp.width; canvas.height=vp.height;
-    await page.render({canvasContext:canvas.getContext("2d"),viewport:vp}).promise;
-    return canvas.toDataURL("image/jpeg",0.72);
-  } catch { return null; }
+    const pdfjs = await loadPDFJS();
+    const raw = atob(b64DataUrl.split(",")[1]);
+    const bytes = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+    const pdf = await pdfjs.getDocument({ data: bytes }).promise;
+    const pageCount = pdf.numPages;
+    const page = await pdf.getPage(1);
+    const vp0 = page.getViewport({ scale: 1 });
+    const scale = Math.min(320 / vp0.width, 480 / vp0.height);
+    const vp = page.getViewport({ scale });
+    const canvas = document.createElement("canvas");
+    canvas.width = vp.width; canvas.height = vp.height;
+    await page.render({ canvasContext: canvas.getContext("2d"), viewport: vp }).promise;
+    const cover = canvas.toDataURL("image/jpeg", 0.72);
+    return { cover, pageCount };
+  } catch {
+    return { cover: null, pageCount: null };
+  }
 }
 
+// Analyse complète du PDF par IA → titre, auteur, catégorie, pages, description formatée
 async function analyzeBookPDF(b64DataUrl) {
   try {
-    const base64=b64DataUrl.split(",")[1];
-    const r=await fetch("https://api.anthropic.com/v1/messages",{
-      method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({
-        model:"claude-sonnet-4-20250514",max_tokens:700,
-        messages:[{role:"user",content:[
-          {type:"document",source:{type:"base64",media_type:"application/pdf",data:base64}},
-          {type:"text",text:`Analyse ce livre PDF et retourne UNIQUEMENT un objet JSON valide (sans backticks ni markdown) avec exactement ces champs:\n{"title":"titre exact","author":"auteur complet","cat":"EXACTEMENT une parmi: ${CATS.join(", ")}","desc":"description vendeuse de 2-3 phrases en français qui donne envie d'acheter"}\nNe réponds QU'avec le JSON brut.`}
-        ]}]
-      })
-    });
-    const d=await r.json();
-    const txt=d?.content?.[0]?.text?.trim()||"{}";
-    return JSON.parse(txt.replace(/```[\w]*\n?|```/g,"").trim());
-  } catch { return {}; }
+    const base64 = b64DataUrl.split(",")[1];
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1500,
+        messages: [{
+          role: "user",
+          content: [
+            {
+              type: "document",
+              source: { type: "base64", media_type: "application/pdf", data: base64 }
+            },
+            {
+              type: "text",
+              text: `Tu es un expert libraire pour une librairie numérique africaine (Guinée/Conakry).
+
+Analyse attentivement ce PDF (couverture + premières pages) et retourne UNIQUEMENT un objet JSON valide (sans backticks ni markdown) avec exactement ces champs :
+
+{
+  "title": "titre exact du livre",
+  "author": "prénom et nom complet de l'auteur",
+  "cat": "EXACTEMENT une parmi: ${CATS.join(", ")}",
+  "pages": nombre_entier_de_pages_du_document,
+  "desc": "description selon le format exact ci-dessous"
 }
 
-async function aiCat(title,author) {
-  try {
-    const r=await fetch("https://api.anthropic.com/v1/messages",{
-      method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:60,messages:[{role:"user",content:`Catégorie parmi: ${CATS.join(", ")}.\nLivre: "${title}" par ${author}.\nRéponds avec le nom exact UNIQUEMENT.`}]})
+Pour le champ "desc", respecte EXACTEMENT ce format ligne par ligne :
+
+[Titre du livre]
+Catégorie : [catégorie]
+Par [Auteur complet]
+
+[Une phrase accrocheuse et vendeuse en français qui donne vraiment envie de lire ce livre]
+
+- [Point clé 1 : bénéfice, thème ou enseignement important du livre]
+- [Point clé 2 : bénéfice, thème ou enseignement important du livre]
+- [Point clé 3 : bénéfice, thème ou enseignement important du livre]
+
+Idée clé : [La leçon ou l'idée principale du livre en une phrase courte et percutante]
+
+Règles IMPORTANTES :
+- Lis la couverture et les premières pages pour extraire titre, auteur et thèmes
+- Si tu connais déjà ce livre, utilise ta connaissance pour enrichir la description
+- La description doit être vendeuse, humaine, et donner VRAIMENT envie d'acheter
+- Tout doit être en français (traduis si nécessaire)
+- Ne réponds QU'avec le JSON brut, aucun texte avant ou après, aucun markdown`
+            }
+          ]
+        }]
+      })
     });
-    const d=await r.json();
-    const t=d?.content?.[0]?.text?.trim()||"";
-    return CATS.find(c=>t.toLowerCase().includes(c.toLowerCase()))||"Autre";
+    const d = await r.json();
+    const txt = d?.content?.[0]?.text?.trim() || "{}";
+    return JSON.parse(txt.replace(/```[\w]*\n?|```/g, "").trim());
+  } catch (e) {
+    console.error("analyzeBookPDF error:", e);
+    return {};
+  }
+}
+
+async function aiCat(title, author) {
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 60, messages: [{ role: "user", content: `Catégorie parmi: ${CATS.join(", ")}.\nLivre: "${title}" par ${author}.\nRéponds avec le nom exact UNIQUEMENT.` }] })
+    });
+    const d = await r.json();
+    const t = d?.content?.[0]?.text?.trim() || "";
+    return CATS.find(c => t.toLowerCase().includes(c.toLowerCase())) || "Autre";
   } catch { return "Autre"; }
 }
 
 async function sendTelegramNotif(order) {
-  if (!TELEGRAM_BOT_TOKEN||TELEGRAM_BOT_TOKEN==="VOTRE_BOT_TOKEN") return;
-  const msg=[`🛒 *Nouvelle commande — Librairie YO*`,``,`👤 ${order.name}`,`📞 \`${order.phone}\``,`💰 *${fmtGNF(order.total)}*`,`🔖 TX OM : \`${order.txId}\``,``,...(order.promoCode?[`🏷️ Code : ${order.promoCode} (-${fmtGNF(order.discount)})`]:[]),`📚 *Livres :*`,...(order.items||[]).map(i=>`  • ${i.title} ×${i.qty}`)].join("\n");
-  try { await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:TELEGRAM_CHAT_ID,text:msg,parse_mode:"Markdown"})}); } catch {}
+  if (!TELEGRAM_BOT_TOKEN || TELEGRAM_BOT_TOKEN === "VOTRE_BOT_TOKEN") return;
+  const msg = [`🛒 *Nouvelle commande — Librairie YO*`, ``, `👤 ${order.name}`, `📞 \`${order.phone}\``, `💰 *${fmtGNF(order.total)}*`, `🔖 TX OM : \`${order.txId}\``, ``, ...(order.promoCode ? [`🏷️ Code : ${order.promoCode} (-${fmtGNF(order.discount)})`] : []), `📚 *Livres :*`, ...(order.items || []).map(i => `  • ${i.title} ×${i.qty}`)].join("\n");
+  try { await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: msg, parse_mode: "Markdown" }) }); } catch {}
 }
 
 // ─────────────────────────────────────────────────────────────
-// CSS  (FONTS supprimé d'ici → déplacé dans index.html)
+// CSS
 // ─────────────────────────────────────────────────────────────
 const CSS = `
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -286,7 +395,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',system-ui,sans
 .grid-sub{color:var(--muted);font-size:.78rem;margin-bottom:1rem}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:1.2rem}
 
-/* ── SKELETONS (remplacement du spinner) ── */
+/* ── SKELETONS ── */
 @keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
 .skeleton{background:linear-gradient(90deg,var(--s2) 25%,var(--bd) 50%,var(--s2) 75%);background-size:800px 100%;animation:shimmer 1.4s infinite linear;border-radius:6px}
 .skeleton-card{background:var(--s1);border:1px solid var(--bd);border-radius:10px;overflow:hidden}
@@ -300,7 +409,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',system-ui,sans
 .sync-dot{width:6px;height:6px;border-radius:50%;background:var(--gold);display:inline-block;animation:pulse-dot 1s ease-in-out infinite}
 @keyframes pulse-dot{0%,100%{opacity:.3}50%{opacity:1}}
 
-/* ── FEATURED SECTION ── */
+/* ── FEATURED ── */
 .featured-section{padding:1.5rem 1.5rem 0;max-width:1100px;margin:0 auto}
 .featured-title{font-family:'Playfair Display',Georgia,serif;font-size:1.1rem;color:var(--cream);margin-bottom:1rem;display:flex;align-items:center;gap:.5rem}
 .featured-scroll{display:flex;gap:1rem;overflow-x:auto;padding:.2rem .1rem 1rem;scrollbar-width:thin;scrollbar-color:var(--bd) transparent}
@@ -366,6 +475,21 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',system-ui,sans
 .promo-row .fi{margin:0}
 .promo-applied{background:rgba(39,174,96,.08);border:1px solid rgba(39,174,96,.3);border-radius:7px;padding:.45rem .85rem;font-size:.8rem;color:var(--green);display:flex;align-items:center;justify-content:space-between;margin-bottom:.8rem}
 
+/* ── PRIX HIGHLIGHT (formulaire admin) ── */
+.prix-highlight{background:rgba(201,150,58,.07);border:2px solid rgba(201,150,58,.4);border-radius:9px;padding:.9rem 1rem;margin-bottom:.9rem}
+.prix-highlight .fl{color:var(--gold);font-size:.75rem;font-weight:600}
+.prix-highlight .fi{border-color:rgba(201,150,58,.4);font-size:1rem;font-weight:700;color:var(--gold)}
+.prix-highlight .fi:focus{border-color:var(--gold);background:rgba(201,150,58,.05)}
+.prix-tip{font-size:.68rem;color:var(--muted);margin-top:.3rem}
+
+/* ── AI PROGRESS ── */
+.ai-progress{background:rgba(201,150,58,.05);border:1px solid rgba(201,150,58,.2);border-radius:10px;padding:1rem 1.1rem;margin-bottom:1rem;display:flex;flex-direction:column;gap:.5rem}
+.ai-progress-title{font-size:.78rem;color:var(--gold);font-weight:600;display:flex;align-items:center;gap:.5rem}
+.ai-progress-steps{display:flex;flex-direction:column;gap:.3rem}
+.ai-step{font-size:.72rem;color:var(--muted);display:flex;align-items:center;gap:.4rem}
+.ai-step.done{color:var(--green)}
+.ai-step.active{color:var(--gold)}
+
 /* ── CART ── */
 .cart-side{position:fixed;right:0;top:0;bottom:0;width:min(380px,100vw);background:var(--s1);border-left:1px solid var(--bd);z-index:300;padding:1.4rem;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s ease}
 .cart-side.open{transform:translateX(0)}
@@ -415,7 +539,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',system-ui,sans
 .toast.er{border-color:var(--red);color:#f08080}
 @keyframes tin{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 
-/* ── PENDING / CHECK PAGES ── */
+/* ── PENDING / CHECK ── */
 .pending-page{max-width:460px;margin:3rem auto;padding:0 1.5rem;text-align:center}
 .pending-page .big-icon{font-size:3.5rem;margin-bottom:.9rem}
 .pending-page h2{font-family:'Playfair Display',Georgia,serif;font-size:1.8rem;color:var(--cream);margin-bottom:.6rem}
@@ -455,12 +579,16 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',system-ui,sans
 .promo-code-row{background:var(--s1);border:1px solid var(--bd);border-radius:9px;padding:.8rem 1rem;margin-bottom:.7rem;display:flex;align-items:center;gap:.8rem;flex-wrap:wrap}
 .promo-code-label{font-family:monospace;font-size:1rem;font-weight:700;min-width:80px}
 .promo-form{background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:1.2rem;margin-bottom:1.5rem}
-.detail-cover{width:120px;flex-shrink:0;aspect-ratio:3/4;border-radius:8px;overflow:hidden;border:1px solid var(--bd);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:2.5rem}
+.detail-cover{width:130px;flex-shrink:0;aspect-ratio:3/4;border-radius:10px;overflow:hidden;border:1px solid var(--bd);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:2.5rem}
 .detail-cover img{width:100%;height:100%;object-fit:cover;object-position:top}
 .detail-title{font-family:'Playfair Display',Georgia,serif;font-size:1.3rem;font-weight:800;color:var(--cream);line-height:1.2;margin-bottom:.4rem}
 .detail-author{color:var(--muted);font-size:.84rem;margin-bottom:.6rem}
 .detail-price{color:var(--gold);font-size:1.4rem;font-weight:700;margin-bottom:.9rem}
-.detail-desc{background:var(--s2);border-radius:8px;padding:.9rem 1rem;font-size:.84rem;color:var(--muted);line-height:1.75;margin-top:.9rem}
+.detail-meta-row{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:.7rem}
+.detail-meta-chip{display:inline-flex;align-items:center;gap:.35rem;background:var(--s2);border:1px solid var(--bd);border-radius:6px;padding:.25rem .6rem;font-size:.74rem;color:var(--muted)}
+.detail-meta-chip strong{color:var(--text)}
+.detail-desc-box{background:var(--s2);border-radius:10px;padding:1rem 1.1rem;margin-top:.9rem;border:1px solid var(--bd)}
+.detail-desc-label{color:var(--gold);font-size:.68rem;text-transform:uppercase;letter-spacing:.12em;margin-bottom:.7rem;font-weight:600}
 .wa-fab{position:fixed;bottom:1.5rem;right:1.5rem;background:#25D366;border:none;border-radius:50%;width:52px;height:52px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,.45);z-index:150;font-size:1.5rem;transition:transform .2s,box-shadow .2s;text-decoration:none}
 .wa-fab:hover{transform:scale(1.1);box-shadow:0 6px 28px rgba(37,211,102,.4)}
 .wa-tooltip{position:absolute;right:calc(100% + .6rem);background:var(--s1);border:1px solid var(--bd);color:var(--text);padding:.3rem .7rem;border-radius:6px;font-size:.74rem;white-space:nowrap;opacity:0;transition:opacity .2s;pointer-events:none}
@@ -478,7 +606,7 @@ hr.div{border:none;border-top:1px solid var(--bd);margin:1rem 0}
 `;
 
 // ─────────────────────────────────────────────────────────────
-// SKELETON CARD — affiché pendant la synchro Firebase
+// SKELETON CARD
 // ─────────────────────────────────────────────────────────────
 const SkeletonCard = () => (
   <div className="skeleton-card">
@@ -496,11 +624,8 @@ const SkeletonCard = () => (
 // ─────────────────────────────────────────────────────────────
 export default function App() {
   // ── Firebase state ──
-  // PERF: initialiser avec le cache localStorage → rendu immédiat
   const [books,       setBooks]       = useState(loadCachedBooks);
-  // PERF: loading=false si on a un cache, sinon true (1re visite)
   const [loading,     setLoading]     = useState(() => loadCachedBooks().length === 0);
-  // PERF: syncing = true pendant la synchro Firebase (silencieuse si cache présent)
   const [syncing,     setSyncing]     = useState(true);
   const [adminOrders, setAdminOrders] = useState([]);
   const [promoCodes,  setPromoCodes]  = useState([]);
@@ -521,43 +646,43 @@ export default function App() {
   const [orderSearch, setOrderSearch] = useState("");
 
   // ── Modals ──
-  const [modal,          setModal]         = useState(null);
-  const [detailBook,     setDetailBook]    = useState(null);
-  const [editB,          setEditB]         = useState(null);
-  const [toast,          setToast]         = useState(null);
+  const [modal,       setModal]       = useState(null);
+  const [detailBook,  setDetailBook]  = useState(null);
+  const [editB,       setEditB]       = useState(null);
+  const [toast,       setToast]       = useState(null);
 
   // ── Login ──
   const [loginPass, setLoginPass] = useState("");
   const [loginErr,  setLoginErr]  = useState("");
 
-  // ── Book form ──
-  const emptyF = { title:"", author:"", cat:"Roman", price:"", num:"", desc:"", stock:99, emoji:"📚" };
-  const [form,          setForm]          = useState(emptyF);
-  const [formErr,       setFormErr]       = useState("");
-  const [formFieldErrs, setFormFieldErrs] = useState({});
-  const [aiLoading,     setAiLoading]     = useState(false);
-  const [uploadedFile,  setUploadedFile]  = useState(null);
-  const [extractedCover,setExtractedCover]= useState(null);
+  // ── Book form — pages ajouté ──
+  const emptyF = { title:"", author:"", cat:"Roman", price:"", num:"", desc:"", stock:99, emoji:"📚", pages:"" };
+  const [form,           setForm]          = useState(emptyF);
+  const [formErr,        setFormErr]       = useState("");
+  const [formFieldErrs,  setFormFieldErrs] = useState({});
+  const [aiLoading,      setAiLoading]     = useState(false);
+  const [aiStep,         setAiStep]        = useState(""); // étape IA en cours
+  const [uploadedFile,   setUploadedFile]  = useState(null);
+  const [extractedCover, setExtractedCover]= useState(null);
 
   // ── Checkout ──
-  const [checkF, setCheckF]       = useState({ name:"", phone:"", txId:"", pin:"" });
-  const [checkErrs, setCheckErrs] = useState({});
-  const [promoInput, setPromoInput] = useState("");
+  const [checkF,       setCheckF]       = useState({ name:"", phone:"", txId:"", pin:"" });
+  const [checkErrs,    setCheckErrs]    = useState({});
+  const [promoInput,   setPromoInput]   = useState("");
   const [appliedPromo, setAppliedPromo] = useState(null);
   const [pendingOrder, setPendingOrder] = useState(null);
 
   // ── My orders ──
-  const [checkPhone,      setCheckPhone]      = useState("");
-  const [checkPin,        setCheckPin]        = useState("");
-  const [myOrders,        setMyOrders]        = useState(null);
-  const [checkingOrders,  setCheckingOrders]  = useState(false);
+  const [checkPhone,     setCheckPhone]     = useState("");
+  const [checkPin,       setCheckPin]       = useState("");
+  const [myOrders,       setMyOrders]       = useState(null);
+  const [checkingOrders, setCheckingOrders] = useState(false);
 
   // ── Promo form (admin) ──
   const emptyPromo = { code:"", discount:"", type:"percent", maxUses:"100" };
   const [promoForm, setPromoForm] = useState(emptyPromo);
 
-  // ─── Firebase: books — CACHE-FIRST ────────────────────────
-  // Si cache présent → loading=false dès le départ, Firebase met à jour silencieusement
+  // ─── Firebase: books ─────────────────────────────────────
   useEffect(() => {
     const unsub = onValue(ref(db,"books"), snap => {
       const data = snap.val();
@@ -567,13 +692,12 @@ export default function App() {
       setBooks(fresh);
       setLoading(false);
       setSyncing(false);
-      // Sauvegarde du cache (sans fileData pour économiser la place)
       saveBooksCache(fresh);
     }, () => { setLoading(false); setSyncing(false); });
     return () => unsub();
   }, []);
 
-  // ─── Firebase: orders (admin only) ────────────────────────
+  // ─── Firebase: orders (admin only) ───────────────────────
   useEffect(() => {
     if (!isAdmin) return;
     const unsub = onValue(ref(db,"orders"), snap => {
@@ -585,7 +709,7 @@ export default function App() {
     return () => unsub();
   }, [isAdmin]);
 
-  // ─── Firebase: promo codes ─────────────────────────────────
+  // ─── Firebase: promo codes ────────────────────────────────
   useEffect(() => {
     const unsub = onValue(ref(db,"promoCodes"), snap => {
       const data = snap.val();
@@ -594,14 +718,14 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // ─── Keyboard: Escape ─────────────────────────────────────
+  // ─── Keyboard Escape ──────────────────────────────────────
   useEffect(() => {
     const h = e => { if (e.key==="Escape") { setModal(null); setCartOpen(false); } };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
   }, []);
 
-  // ─── Scroll to top on view change ─────────────────────────
+  // ─── Scroll to top on view change ────────────────────────
   useEffect(() => { window.scrollTo({top:0,behavior:"smooth"}); }, [view]);
 
   // ── helpers internes ──
@@ -615,7 +739,7 @@ export default function App() {
     });
   };
 
-  // ─── Catalogue filtré + trié ───────────────────────────────
+  // ─── Catalogue filtré + trié ──────────────────────────────
   const filtered = (() => {
     const q = search.toLowerCase();
     let res = books.filter(b => {
@@ -646,7 +770,7 @@ export default function App() {
     setCart(p => { const ex=p.find(i=>i.fbKey===b.fbKey); return ex?p.map(i=>i.fbKey===b.fbKey?{...i,qty:i.qty+1}:i):[...p,{...b,qty:1}]; });
     toast$(`"${b.title}" ajouté ✓`);
   };
-  const updQ   = (k,d) => setCart(p=>p.map(i=>i.fbKey===k?{...i,qty:Math.max(1,i.qty+d)}:i));
+  const updQ    = (k,d) => setCart(p=>p.map(i=>i.fbKey===k?{...i,qty:Math.max(1,i.qty+d)}:i));
   const remCart = k => setCart(p=>p.filter(i=>i.fbKey!==k));
   const copyOM  = () => { navigator.clipboard.writeText(OM_NUMBER).catch(()=>{}); toast$("Numéro copié 📋"); };
 
@@ -668,11 +792,19 @@ export default function App() {
   };
 
   // ─── Formulaire livre ─────────────────────────────────────
-  const openAdd  = () => { setForm(emptyF); setUploadedFile(null); setExtractedCover(null); setFormErr(""); setFormFieldErrs({}); setModal("add"); };
+  const openAdd  = () => {
+    setForm(emptyF); setUploadedFile(null); setExtractedCover(null);
+    setFormErr(""); setFormFieldErrs({}); setAiStep(""); setModal("add");
+  };
   const openEdit = b => {
     setEditB(b);
-    setForm({title:b.title,author:b.author,cat:b.cat,price:b.price,num:b.num,desc:b.desc||"",stock:b.stock,emoji:b.emoji||"📚"});
-    setUploadedFile(null); setExtractedCover(b.coverImage||null); setFormErr(""); setFormFieldErrs({}); setModal("edit");
+    setForm({
+      title:b.title, author:b.author, cat:b.cat,
+      price:b.price, num:b.num, desc:b.desc||"",
+      stock:b.stock, emoji:b.emoji||"📚", pages:b.pages?String(b.pages):""
+    });
+    setUploadedFile(null); setExtractedCover(b.coverImage||null);
+    setFormErr(""); setFormFieldErrs({}); setAiStep(""); setModal("edit");
   };
 
   const chForm = e => {
@@ -688,46 +820,79 @@ export default function App() {
     setAiLoading(false);
   };
 
+  // ─── Upload PDF + analyse IA complète ─────────────────────
   const handleFileChange = async e => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 9*1024*1024) { toast$("Fichier trop volumineux (max 9 Mo)","er"); return; }
     const b64 = await readFileAsBase64(file);
     setUploadedFile({name:file.name,size:(file.size/1024).toFixed(0)+" Ko",b64,type:file.type});
+
     if (file.type==="application/pdf") {
-      setAiLoading(true); toast$("🤖 IA analyse le PDF…");
-      const [cover, analysis] = await Promise.all([extractPDFCover(b64), analyzeBookPDF(b64)]);
+      setAiLoading(true);
+      setAiStep("cover");
+      toast$("🤖 IA analyse le PDF…");
+
+      // Étape 1 : extraire couverture + compter les pages (PDF.js)
+      const { cover, pageCount } = await extractPDFInfo(b64);
       if (cover) setExtractedCover(cover);
-      if (analysis.title||analysis.author||analysis.desc) {
-        setForm(p=>({...p,
-          title:  analysis.title  || p.title,
-          author: analysis.author || p.author,
-          cat:    CATS.includes(analysis.cat)?analysis.cat:(p.cat||"Autre"),
-          desc:   analysis.desc   || p.desc,
-        }));
-      }
-      setAiLoading(false); toast$("✅ IA terminée — vérifiez les champs");
+      setAiStep("analyze");
+
+      // Étape 2 : analyse IA (titre, auteur, cat, pages, description)
+      const analysis = await analyzeBookPDF(b64);
+
+      // Remplissage automatique du formulaire
+      setForm(p => ({
+        ...p,
+        title:  analysis.title  || p.title,
+        author: analysis.author || p.author,
+        cat:    CATS.includes(analysis.cat) ? analysis.cat : (p.cat || "Autre"),
+        desc:   analysis.desc   || p.desc,
+        // Pages : priorité à l'IA (qui connaît le vrai nbre), fallback PDF.js
+        pages:  analysis.pages
+          ? String(analysis.pages)
+          : (pageCount ? String(pageCount) : p.pages),
+      }));
+
+      setAiLoading(false);
+      setAiStep("done");
+      toast$("✅ Analyse terminée — saisissez le prix pour publier");
     }
   };
 
+  // ─── Sauvegarde livre ─────────────────────────────────────
   const saveBook = async () => {
     const errs = {};
-    if (!form.title.trim())  errs.title  = "Titre requis";
-    if (!form.author.trim()) errs.author = "Auteur requis";
-    if (!form.num||isNaN(form.num)) errs.num = "Prix requis";
+    if (!form.title.trim())        errs.title  = "Titre requis";
+    if (!form.author.trim())       errs.author = "Auteur requis";
+    if (!form.num || isNaN(form.num)) errs.num = "Prix requis";
     if (Object.keys(errs).length) { setFormFieldErrs(errs); return; }
 
     const bookData = {
-      title:sanitize(form.title), author:sanitize(form.author), cat:form.cat, emoji:form.emoji,
-      price:form.price||`${Number(form.num).toLocaleString("fr-FR")} GNF`,
-      num:Number(form.num), desc:sanitize(form.desc), stock:Number(form.stock)||99,
-      hasFile:uploadedFile?true:(editB?.hasFile||false),
-      coverImage:extractedCover||editB?.coverImage||null,
-      featured:editB?.featured||false,
-      createdAt:modal==="add"?Date.now():(editB?.createdAt||Date.now()),
+      title:  sanitize(form.title),
+      author: sanitize(form.author),
+      cat:    form.cat,
+      emoji:  form.emoji,
+      price:  form.price || `${Number(form.num).toLocaleString("fr-FR")} GNF`,
+      num:    Number(form.num),
+      desc:   sanitize(form.desc),
+      stock:  Number(form.stock) || 99,
+      pages:  form.pages ? Number(form.pages) : null,
+      hasFile:     uploadedFile ? true : (editB?.hasFile || false),
+      coverImage:  extractedCover || editB?.coverImage || null,
+      featured:    editB?.featured || false,
+      createdAt:   modal==="add" ? Date.now() : (editB?.createdAt || Date.now()),
     };
-    if (uploadedFile)                          { bookData.fileData=uploadedFile.b64; bookData.fileName=uploadedFile.name; bookData.fileType=uploadedFile.type; }
-    else if (modal==="edit"&&editB?.fileData)  { bookData.fileData=editB.fileData; bookData.fileName=editB.fileName; bookData.fileType=editB.fileType; }
+
+    if (uploadedFile) {
+      bookData.fileData = uploadedFile.b64;
+      bookData.fileName = uploadedFile.name;
+      bookData.fileType = uploadedFile.type;
+    } else if (modal==="edit" && editB?.fileData) {
+      bookData.fileData = editB.fileData;
+      bookData.fileName = editB.fileName;
+      bookData.fileType = editB.fileType;
+    }
 
     try {
       if (modal==="add") { await push(ref(db,"books"),bookData); toast$(`"${form.title}" publié ✓`); }
@@ -750,17 +915,17 @@ export default function App() {
     if (!code)                              { toast$("Code promo invalide ou inactif","er"); return; }
     if (code.maxUses && (code.uses||0)>=code.maxUses) { toast$("Ce code promo a expiré","er"); return; }
     setAppliedPromo(code);
-    toast$(`Code "${code.code}" appliqué — ${code.type==="percent"?code.discount+"%":fmtGNF(code.discount)} de réduction ✓`);
+    toast$(`Code "${code.code}" appliqué ✓`);
   };
 
   const doCheckout = async () => {
     const errs = {};
-    if (!checkF.name.trim())                         errs.name  = "Nom requis";
-    if (!checkF.phone.trim())                        errs.phone = "Téléphone requis";
-    else if (!validPhone(checkF.phone))              errs.phone = "Format invalide (9–15 chiffres)";
-    if (!checkF.txId.trim())                         errs.txId  = "N° transaction requis";
-    else if (!validTx(checkF.txId))                  errs.txId  = "Minimum 4 caractères";
-    if (!/^\d{4}$/.test(checkF.pin))                 errs.pin   = "PIN à 4 chiffres requis";
+    if (!checkF.name.trim())                    errs.name  = "Nom requis";
+    if (!checkF.phone.trim())                   errs.phone = "Téléphone requis";
+    else if (!validPhone(checkF.phone))         errs.phone = "Format invalide (9–15 chiffres)";
+    if (!checkF.txId.trim())                    errs.txId  = "N° transaction requis";
+    else if (!validTx(checkF.txId))             errs.txId  = "Minimum 4 caractères";
+    if (!/^\d{4}$/.test(checkF.pin))            errs.pin   = "PIN à 4 chiffres requis";
     if (Object.keys(errs).length) { setCheckErrs(errs); return; }
     if (!canOrder()) { toast$("Trop de tentatives — réessayez dans 10 minutes","er"); return; }
 
@@ -798,11 +963,11 @@ export default function App() {
     } catch(err) { toast$("Erreur : "+err.message,"er"); }
   };
 
-  // ─── Mes commandes (client) ───────────────────────────────
+  // ─── Mes commandes ────────────────────────────────────────
   const checkMyOrders = async () => {
     const errs = {};
-    if (!checkPhone.trim())              errs.phone = "Téléphone requis";
-    if (!/^\d{4}$/.test(checkPin))       errs.pin   = "PIN à 4 chiffres";
+    if (!checkPhone.trim())        errs.phone = "Téléphone requis";
+    if (!/^\d{4}$/.test(checkPin)) errs.pin   = "PIN à 4 chiffres";
     if (Object.keys(errs).length) { toast$(Object.values(errs)[0],"er"); return; }
     setCheckingOrders(true);
     try {
@@ -819,7 +984,7 @@ export default function App() {
     setCheckingOrders(false);
   };
 
-  // ─── Admin: statut commande ────────────────────────────────
+  // ─── Admin: statut commande ───────────────────────────────
   const setOrderStatus = async (fbKey, status) => {
     try {
       await update(ref(db,`orders/${fbKey}`), {status, reviewedAt:Date.now()});
@@ -827,7 +992,7 @@ export default function App() {
     } catch(err) { toast$("Erreur : "+err.message,"er"); }
   };
 
-  // ─── Admin: promo codes ────────────────────────────────────
+  // ─── Admin: promo codes ───────────────────────────────────
   const addPromoCode = async () => {
     if (!promoForm.code.trim()||!promoForm.discount) { toast$("Code et réduction requis","er"); return; }
     const existing = promoCodes.find(p=>p.code.toUpperCase()===promoForm.code.trim().toUpperCase());
@@ -852,7 +1017,7 @@ export default function App() {
     toast$("Code supprimé","er");
   };
 
-  // ─── Téléchargement ───────────────────────────────────────
+  // ─── Téléchargement ──────────────────────────────────────
   const downloadBook = book => {
     if (!book?.fileData) { toast$("Fichier non disponible","er"); return; }
     const a=document.createElement("a"); a.href=book.fileData; a.download=book.fileName||book.title; a.click();
@@ -896,9 +1061,9 @@ export default function App() {
     return !q||b.title?.toLowerCase().includes(q)||b.author?.toLowerCase().includes(q);
   });
 
-  // ─────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────
   // COMPOSANT CARTE LIVRE
-  // ─────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────
   const BookCard = ({ b, admin }) => (
     <div className="card" onClick={() => { setDetailBook(b); setModal("detail"); }}>
       <div className="card-cover">
@@ -938,9 +1103,9 @@ export default function App() {
     </div>
   );
 
-  // ─────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────
   // RENDER
-  // ─────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────
   return (
     <>
       <style>{CSS}</style>
@@ -981,9 +1146,9 @@ export default function App() {
         </div>
       )}
 
-      {/* ════════════════════════════════════
+      {/* ══════════════════════════════
           VUE HOME
-      ════════════════════════════════════ */}
+      ══════════════════════════════ */}
       {view==="home"&&<>
         <section className="hero">
           <p className="hero-tag">Librairie numérique · Conakry, Guinée</p>
@@ -1003,7 +1168,6 @@ export default function App() {
           </div>
         </section>
 
-        {/* Section livres mis en avant */}
         {featuredBooks.length>0 && !search && !activeCat && (
           <div className="featured-section">
             <div className="featured-title">⭐ Coups de cœur</div>
@@ -1022,8 +1186,7 @@ export default function App() {
             <div>
               <div className="grid-title">
                 Catalogue
-                {/* Indicateur discret de synchro Firebase */}
-                {syncing && <span title="Synchronisation en cours…" style={{marginLeft:".5rem",verticalAlign:"middle"}}><span className="sync-dot"/></span>}
+                {syncing && <span title="Synchronisation…" style={{marginLeft:".5rem",verticalAlign:"middle"}}><span className="sync-dot"/></span>}
               </div>
               <div className="grid-sub">{filtered.length} livre{filtered.length!==1?"s":""} disponible{filtered.length!==1?"s":""}</div>
             </div>
@@ -1037,11 +1200,8 @@ export default function App() {
             ))}
           </div>
 
-          {/* PREMIER CHARGEMENT (aucun cache) → skeletons */}
           {loading ? (
-            <div className="grid">
-              {Array.from({length:8}).map((_,i)=><SkeletonCard key={i}/>)}
-            </div>
+            <div className="grid">{Array.from({length:8}).map((_,i)=><SkeletonCard key={i}/>)}</div>
           ) : filtered.length===0 ? (
             <div className="empty">
               <div style={{fontSize:"2.8rem",marginBottom:".8rem"}}>{activeCat==="__wish__"?"❤️":"📭"}</div>
@@ -1053,9 +1213,9 @@ export default function App() {
         </div>
       </>}
 
-      {/* ════════════════════════════════════
+      {/* ══════════════════════════════
           VUE ADMIN
-      ════════════════════════════════════ */}
+      ══════════════════════════════ */}
       {view==="admin"&&isAdmin&&(
         <div className="page">
           <div style={{display:"flex",alignItems:"center",gap:"1rem",marginBottom:"1.5rem",flexWrap:"wrap"}}>
@@ -1063,12 +1223,12 @@ export default function App() {
             <span style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:"1.35rem",color:"var(--cream)"}}>Administration</span>
           </div>
           <div className="admin-tabs">
-            <button className={`tab ${adminTab==="stats"?"active":""}`}    onClick={()=>setAdminTab("stats")}>📊 Stats</button>
-            <button className={`tab ${adminTab==="books"?"active":""}`}    onClick={()=>setAdminTab("books")}>📚 Catalogue</button>
-            <button className={`tab ${adminTab==="orders"?"active":""}`}   onClick={()=>setAdminTab("orders")}>
+            <button className={`tab ${adminTab==="stats"?"active":""}`}   onClick={()=>setAdminTab("stats")}>📊 Stats</button>
+            <button className={`tab ${adminTab==="books"?"active":""}`}   onClick={()=>setAdminTab("books")}>📚 Catalogue</button>
+            <button className={`tab ${adminTab==="orders"?"active":""}`}  onClick={()=>setAdminTab("orders")}>
               📦 Commandes{pendingCount>0&&<span className="badge" style={{marginLeft:".3rem"}}>{pendingCount}</span>}
             </button>
-            <button className={`tab ${adminTab==="promos"?"active":""}`}   onClick={()=>setAdminTab("promos")}>🏷️ Promos</button>
+            <button className={`tab ${adminTab==="promos"?"active":""}`}  onClick={()=>setAdminTab("promos")}>🏷️ Promos</button>
           </div>
 
           {adminTab==="stats"&&<>
@@ -1217,9 +1377,9 @@ export default function App() {
         </div>
       )}
 
-      {/* ════════════════════════════════════
+      {/* ══════════════════════════════
           VUE PENDING
-      ════════════════════════════════════ */}
+      ══════════════════════════════ */}
       {view==="pending"&&pendingOrder&&(
         <div className="pending-page">
           <div className="big-icon">⏳</div>
@@ -1246,9 +1406,9 @@ export default function App() {
         </div>
       )}
 
-      {/* ════════════════════════════════════
+      {/* ══════════════════════════════
           VUE MES COMMANDES
-      ════════════════════════════════════ */}
+      ══════════════════════════════ */}
       {view==="check"&&(
         <div className="check-page">
           <div style={{textAlign:"center",marginBottom:"1.5rem"}}>
@@ -1320,9 +1480,9 @@ export default function App() {
         </div>
       )}
 
-      {/* ════════════════════════════════════
+      {/* ══════════════════════════════
           PANIER (sidebar)
-      ════════════════════════════════════ */}
+      ══════════════════════════════ */}
       {cartOpen&&<div className="co" onClick={()=>setCartOpen(false)}/>}
       <div className={`cart-side ${cartOpen?"open":""}`}>
         <div className="ch">
@@ -1359,11 +1519,13 @@ export default function App() {
         )}
       </div>
 
-      {/* ════════════════════════════════════
+      {/* ══════════════════════════════
           MODALS
-      ════════════════════════════════════ */}
+      ══════════════════════════════ */}
       {modal&&(
         <div className="overlay" onClick={e=>{ if(e.target===e.currentTarget) setModal(null); }}>
+
+          {/* ── LOGIN ── */}
           {modal==="login"&&(
             <div className="modal" style={{maxWidth:340}}>
               <button className="mc" onClick={()=>setModal(null)}>✕</button>
@@ -1382,6 +1544,7 @@ export default function App() {
             </div>
           )}
 
+          {/* ── DÉTAIL LIVRE — avec pages séparées et description formatée ── */}
           {modal==="detail"&&detailBook&&(
             <div className="modal" style={{maxWidth:560}}>
               <button className="mc" onClick={()=>setModal(null)}>✕</button>
@@ -1393,11 +1556,28 @@ export default function App() {
                 </div>
                 <div style={{flex:1,minWidth:180}}>
                   <div className="cat-tag">{CAT_ICONS[detailBook.cat]||""} {detailBook.cat}</div>
-                  {isNew7d(detailBook.createdAt)&&<span style={{background:"var(--om)",color:"#fff",fontSize:".62rem",fontWeight:700,padding:".12rem .4rem",borderRadius:4,marginBottom:".5rem",display:"inline-block"}}>🆕 NOUVEAU</span>}
+                  {isNew7d(detailBook.createdAt)&&(
+                    <span style={{background:"var(--om)",color:"#fff",fontSize:".62rem",fontWeight:700,padding:".12rem .4rem",borderRadius:4,marginBottom:".5rem",display:"inline-block"}}>🆕 NOUVEAU</span>
+                  )}
                   <div className="detail-title">{detailBook.title}</div>
                   <div className="detail-author">{detailBook.author}</div>
                   <div className="detail-price">{detailBook.price}</div>
-                  <div style={{display:"flex",gap:".5rem",flexWrap:"wrap"}}>
+
+                  {/* ── MÉTADONNÉES : pages + disponibilité ── */}
+                  <div className="detail-meta-row">
+                    {detailBook.pages && (
+                      <div className="detail-meta-chip">
+                        📄 <strong>{detailBook.pages.toLocaleString("fr-FR")}</strong>&nbsp;pages
+                      </div>
+                    )}
+                    <div className="detail-meta-chip">
+                      {detailBook.hasFile
+                        ? <><span style={{color:"var(--green)"}}>✅</span>&nbsp;<strong>PDF disponible</strong></>
+                        : <><span>⏳</span>&nbsp;Bientôt dispo</>}
+                    </div>
+                  </div>
+
+                  <div style={{display:"flex",gap:".5rem",flexWrap:"wrap",marginTop:".5rem"}}>
                     <button className="btn btn-gold" onClick={()=>{ addCart(detailBook); setModal(null); }}>🛒 Acheter</button>
                     <button className="btn btn-ghost" onClick={()=>toggleWish(detailBook.fbKey)}>
                       {wishlist.includes(detailBook.fbKey)?"❤️ Favori":"🤍 Favoris"}
@@ -1405,26 +1585,31 @@ export default function App() {
                   </div>
                 </div>
               </div>
+
+              {/* ── DESCRIPTION FORMATÉE ── */}
               {detailBook.desc&&(
-                <div className="detail-desc">
-                  <div style={{color:"var(--gold)",fontSize:".7rem",textTransform:"uppercase",letterSpacing:".1em",marginBottom:".5rem"}}>Description</div>
-                  {detailBook.desc}
+                <div className="detail-desc-box">
+                  <div className="detail-desc-label">📝 À propos de ce livre</div>
+                  <FormatDesc text={detailBook.desc}/>
                 </div>
               )}
-              <div style={{marginTop:".9rem",display:"flex",alignItems:"center",gap:".5rem",fontSize:".75rem",color:"var(--muted)"}}>
-                {detailBook.hasFile
-                  ?<span style={{color:"var(--green)"}}>✅ PDF disponible — téléchargement immédiat après confirmation</span>
-                  :<span>⏳ Fichier en cours d'ajout</span>}
-              </div>
             </div>
           )}
 
+          {/* ── AJOUT / MODIFICATION LIVRE ── */}
           {(modal==="add"||modal==="edit")&&(
             <div className="modal">
               <button className="mc" onClick={()=>setModal(null)}>✕</button>
               <h2>{modal==="add"?"📚 Ajouter un livre":"✏️ Modifier"}</h2>
+
+              {/* Zone upload PDF */}
               <div className="fg">
-                <label className="fl">📁 Fichier PDF / EPUB (max 9 Mo) — <span style={{color:"var(--gold)"}}>l'IA remplit tout automatiquement</span></label>
+                <label className="fl">
+                  📁 Fichier PDF (max 9 Mo) —{" "}
+                  <span style={{color:"var(--gold)"}}>
+                    {aiStep==="done"?"✅ IA a tout rempli !":"l'IA remplit tout automatiquement"}
+                  </span>
+                </label>
                 {!uploadedFile?(
                   <div className="upload-zone">
                     <input type="file" accept=".pdf,.epub,.txt" onChange={handleFileChange}/>
@@ -1436,18 +1621,40 @@ export default function App() {
                     <span>✅</span>
                     <span className="fname">{uploadedFile.name}</span>
                     <span className="fsize">{uploadedFile.size}</span>
-                    <button className="file-remove" onClick={()=>{ setUploadedFile(null); setExtractedCover(null); }}>✕</button>
+                    <button className="file-remove" onClick={()=>{ setUploadedFile(null); setExtractedCover(null); setAiStep(""); }}>✕</button>
                   </div>
                 )}
-                {modal==="edit"&&editB?.hasFile&&!uploadedFile&&<p style={{fontSize:".7rem",color:"var(--green)",marginTop:".3rem"}}>✅ Fichier déjà associé.</p>}
+                {modal==="edit"&&editB?.hasFile&&!uploadedFile&&(
+                  <p style={{fontSize:".7rem",color:"var(--green)",marginTop:".3rem"}}>✅ Fichier déjà associé.</p>
+                )}
               </div>
-              {aiLoading&&<div className="ai-row"><span className="spin">⚙️</span> IA : extraction couverture + analyse…</div>}
+
+              {/* Progression IA */}
+              {aiLoading&&(
+                <div className="ai-progress">
+                  <div className="ai-progress-title">
+                    <span className="spin">⚙️</span> Analyse en cours…
+                  </div>
+                  <div className="ai-progress-steps">
+                    <div className={`ai-step ${aiStep==="cover"?"active":aiStep==="analyze"||aiStep==="done"?"done":""}`}>
+                      {aiStep==="cover"?"⏳":"✅"} Extraction de la couverture et comptage des pages
+                    </div>
+                    <div className={`ai-step ${aiStep==="analyze"?"active":aiStep==="done"?"done":""}`}>
+                      {aiStep==="done"?"✅":aiStep==="analyze"?"⏳":"○"} Analyse IA : titre, auteur, catégorie, description
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Aperçu couverture */}
               {extractedCover&&!aiLoading&&(
                 <div className="ai-analysis-box">
-                  <div style={{fontSize:".74rem",color:"var(--gold)",marginBottom:".4rem"}}>📸 Couverture extraite</div>
+                  <div style={{fontSize:".74rem",color:"var(--gold)",marginBottom:".4rem"}}>📸 Couverture extraite automatiquement</div>
                   <img src={extractedCover} alt="Couverture" className="cover-preview"/>
                 </div>
               )}
+
+              {/* Champs pré-remplis */}
               <div className="fg">
                 <label className="fl">Titre *</label>
                 <input className={`fi ${formFieldErrs.title?"err-field":""}`} name="title" value={form.title} onChange={chForm} onBlur={handleBlur} placeholder="Titre du livre"/>
@@ -1461,38 +1668,68 @@ export default function App() {
               <div className="fr">
                 <div className="fg">
                   <label className="fl">Catégorie</label>
-                  <select className="fs" name="cat" value={form.cat} onChange={chForm}>{CATS.map(c=><option key={c}>{c}</option>)}</select>
+                  <select className="fs" name="cat" value={form.cat} onChange={chForm}>
+                    {CATS.map(c=><option key={c}>{c}</option>)}
+                  </select>
                 </div>
                 <div className="fg">
                   <label className="fl">Emoji</label>
-                  <select className="fs" name="emoji" value={form.emoji} onChange={chForm}>{EMOJIS.map(e=><option key={e} value={e}>{e}</option>)}</select>
+                  <select className="fs" name="emoji" value={form.emoji} onChange={chForm}>
+                    {EMOJIS.map(e=><option key={e} value={e}>{e}</option>)}
+                  </select>
                 </div>
               </div>
+
+              {/* Nombre de pages (pré-rempli automatiquement) */}
               <div className="fr">
                 <div className="fg">
-                  <label className="fl">Prix (GNF) *</label>
-                  <input className={`fi ${formFieldErrs.num?"err-field":""}`} name="num" type="number" value={form.num} onChange={chForm} placeholder="ex: 35000"/>
-                  {formFieldErrs.num&&<div className="field-err">{formFieldErrs.num}</div>}
+                  <label className="fl">Nombre de pages</label>
+                  <input className="fi" name="pages" type="number" min="1" value={form.pages} onChange={chForm}
+                    placeholder="Ex: 320" style={{fontFamily:"monospace"}}/>
+                  {form.pages&&<div style={{fontSize:".68rem",color:"var(--green)",marginTop:".2rem"}}>✅ Rempli automatiquement</div>}
                 </div>
                 <div className="fg">
                   <label className="fl">Stock</label>
                   <input className="fi" name="stock" type="number" min="0" value={form.stock} onChange={chForm}/>
                 </div>
               </div>
+
+              {/* Description (pré-remplie avec la formule) */}
               <div className="fg">
                 <label className="fl">Description</label>
-                <textarea className="ft" name="desc" value={form.desc} onChange={chForm} placeholder="Résumé…"/>
+                <textarea className="ft" name="desc" value={form.desc} onChange={chForm}
+                  placeholder="Sera générée automatiquement par l'IA…" style={{minHeight:160}}/>
               </div>
+
+              {/* ── PRIX : le seul champ obligatoire à remplir manuellement ── */}
+              <div className="prix-highlight">
+                <label className="fl">💰 Prix (GNF) * — À vous de fixer</label>
+                <input className={`fi ${formFieldErrs.num?"err-field":""}`}
+                  name="num" type="number" value={form.num} onChange={chForm}
+                  placeholder="Ex: 35000" autoComplete="off"
+                  style={{fontSize:"1.1rem",fontWeight:700}}/>
+                {form.num&&<div className="prix-tip">→ Affiché : <strong style={{color:"var(--gold)"}}>{Number(form.num).toLocaleString("fr-FR")} GNF</strong></div>}
+                {formFieldErrs.num&&<div className="field-err">{formFieldErrs.num}</div>}
+              </div>
+
               {formErr&&<div className="err">{formErr}</div>}
+
               <div className="fa">
                 <button className="btn btn-ghost" onClick={()=>setModal(null)}>Annuler</button>
-                <button className="btn btn-gold"  onClick={saveBook} disabled={aiLoading}>
-                  {aiLoading?"⏳ IA…":modal==="add"?"Publier":"Enregistrer"}
+                <button className="btn btn-gold" onClick={saveBook}
+                  disabled={aiLoading || !form.num}
+                  title={!form.num?"Saisissez le prix pour publier":""}>
+                  {aiLoading
+                    ? <><span className="spin">⚙️</span> IA en cours…</>
+                    : !form.num
+                      ? "⚠️ Prix requis"
+                      : modal==="add" ? "Publier →" : "Enregistrer →"}
                 </button>
               </div>
             </div>
           )}
 
+          {/* ── SUPPRESSION ── */}
           {modal==="del"&&(
             <div className="modal" style={{maxWidth:360}}>
               <h2>🗑️ Supprimer ?</h2>
@@ -1506,6 +1743,7 @@ export default function App() {
             </div>
           )}
 
+          {/* ── CHECKOUT ── */}
           {modal==="checkout"&&(
             <div className="modal">
               <button className="mc" onClick={()=>setModal(null)}>✕</button>
