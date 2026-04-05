@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { initializeApp } from "firebase/app";
 import {
   getDatabase, ref, onValue, push, remove, update, get
@@ -25,21 +25,40 @@ const db = getDatabase(fbApp);
 // ─────────────────────────────────────────────────────────────
 const ADMIN_PASSWORD = "papiraro2143";
 const OM_NUMBER      = "224613908784";
-const WA_NUMBER      = "224661862044"; // Support WhatsApp
+const WA_NUMBER      = "224661862044";
 const TELEGRAM_BOT_TOKEN = "VOTRE_BOT_TOKEN";
 const TELEGRAM_CHAT_ID   = "VOTRE_CHAT_ID";
+
+// ─────────────────────────────────────────────────────────────
+// CACHE LIVRES — affichage quasi-instantané au 2e chargement
+// ─────────────────────────────────────────────────────────────
+const BOOKS_CACHE_KEY = "yo_books_v2";
+
+const loadCachedBooks = () => {
+  try {
+    const raw = localStorage.getItem(BOOKS_CACHE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+};
+
+const saveBooksCache = (books) => {
+  try {
+    // On ne stocke que les champs légers (pas fileData qui pèse des Mo)
+    const slim = books.map(({ fileData, ...rest }) => rest);
+    localStorage.setItem(BOOKS_CACHE_KEY, JSON.stringify(slim));
+  } catch {}
+};
 
 // ─────────────────────────────────────────────────────────────
 // SÉCURITÉ — Session admin (2h) + Rate limiter + Wishlist
 // ─────────────────────────────────────────────────────────────
 const SESSION_KEY = "yo_adm_sess";
-const SESSION_TTL = 7_200_000; // 2 heures
+const SESSION_TTL = 7_200_000;
 
 const saveSession  = () => localStorage.setItem(SESSION_KEY, Date.now().toString());
 const loadSession  = () => { const t=parseInt(localStorage.getItem(SESSION_KEY)||"0"); return !!(t && Date.now()-t<SESSION_TTL); };
 const clearSession = () => localStorage.removeItem(SESSION_KEY);
 
-// Rate limit : max 3 commandes / 10 min par appareil
 const RATE_KEY = "yo_rate";
 const canOrder = () => {
   try {
@@ -51,7 +70,6 @@ const canOrder = () => {
   } catch { return true; }
 };
 
-// Wishlist locale
 const WISH_KEY  = "yo_wishlist";
 const loadWish  = () => { try { return JSON.parse(localStorage.getItem(WISH_KEY)||"[]"); } catch { return []; } };
 const saveWish  = w  => { try { localStorage.setItem(WISH_KEY, JSON.stringify(w)); } catch {} };
@@ -209,10 +227,8 @@ async function sendTelegramNotif(order) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// CSS
+// CSS  (FONTS supprimé d'ici → déplacé dans index.html)
 // ─────────────────────────────────────────────────────────────
-const FONTS = `@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,800;1,400&family=DM+Sans:wght@300;400;500;600&display=swap');`;
-
 const CSS = `
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -221,14 +237,14 @@ const CSS = `
   --muted:#8a7f74;--red:#c0392b;--om:#ff6600;--green:#27ae60;--orange:#e67e22;
   --blue:#2980b9;--purple:#8e44ad;
 }
-body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',system-ui,sans-serif;min-height:100vh}
 
 /* ── NAV ── */
 .nav{position:sticky;top:0;z-index:100;height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 1.5rem;background:rgba(15,13,11,.97);backdrop-filter:blur(12px);border-bottom:1px solid var(--bd)}
-.logo{font-family:'Playfair Display',serif;font-size:1.35rem;font-weight:800;color:var(--cream);cursor:pointer;user-select:none}
+.logo{font-family:'Playfair Display',Georgia,serif;font-size:1.35rem;font-weight:800;color:var(--cream);cursor:pointer;user-select:none}
 .logo em{color:var(--gold);font-style:normal}
 .nav-right{display:flex;gap:.4rem;align-items:center;flex-wrap:wrap}
-.btn{display:inline-flex;align-items:center;gap:.35rem;padding:.42rem 1rem;border-radius:7px;border:none;font-family:'DM Sans';font-size:.82rem;font-weight:500;cursor:pointer;transition:all .18s;white-space:nowrap;text-decoration:none}
+.btn{display:inline-flex;align-items:center;gap:.35rem;padding:.42rem 1rem;border-radius:7px;border:none;font-family:'DM Sans',system-ui,sans-serif;font-size:.82rem;font-weight:500;cursor:pointer;transition:all .18s;white-space:nowrap;text-decoration:none}
 .btn-gold{background:var(--gold);color:#0f0d0b;font-weight:700}.btn-gold:hover{background:var(--gl)}
 .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--bd)}.btn-ghost:hover{color:var(--text);border-color:var(--muted)}
 .btn-red{background:var(--red);color:#fff}.btn-red:hover{background:#a93226}
@@ -246,11 +262,11 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 /* ── HERO ── */
 .hero{text-align:center;padding:3.5rem 1.5rem 2rem;background:radial-gradient(ellipse at 50% 0%,rgba(201,150,58,.08) 0%,transparent 65%);border-bottom:1px solid var(--bd)}
 .hero-tag{font-size:.7rem;letter-spacing:.3em;text-transform:uppercase;color:var(--gold);margin-bottom:.9rem}
-.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2rem,5.5vw,3.8rem);font-weight:800;color:var(--cream);line-height:1.1;margin-bottom:.8rem}
+.hero h1{font-family:'Playfair Display',Georgia,serif;font-size:clamp(2rem,5.5vw,3.8rem);font-weight:800;color:var(--cream);line-height:1.1;margin-bottom:.8rem}
 .hero h1 i{color:var(--gold);font-style:italic}
 .hero p{color:var(--muted);font-size:.92rem;max-width:420px;margin:0 auto 1.6rem}
 .search-box{max-width:400px;margin:0 auto .9rem;position:relative}
-.search-box input{width:100%;background:var(--s2);border:1px solid var(--bd);color:var(--text);padding:.7rem 1rem .7rem 2.5rem;border-radius:8px;font-family:'DM Sans';font-size:.88rem;outline:none;transition:border-color .2s}
+.search-box input{width:100%;background:var(--s2);border:1px solid var(--bd);color:var(--text);padding:.7rem 1rem .7rem 2.5rem;border-radius:8px;font-family:'DM Sans',system-ui,sans-serif;font-size:.88rem;outline:none;transition:border-color .2s}
 .search-box input:focus{border-color:var(--gold)}.search-box input::placeholder{color:var(--muted)}
 .si{position:absolute;left:.8rem;top:50%;transform:translateY(-50%);color:var(--muted)}
 
@@ -261,18 +277,32 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .pill:hover,.pill.active{background:rgba(201,150,58,.12);border-color:var(--gold);color:var(--gold)}
 .sort-bar{display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin-bottom:1.2rem}
 .sort-lbl{font-size:.72rem;color:var(--muted);margin-right:.2rem}
-.sort-btn{background:var(--s2);border:1px solid var(--bd);color:var(--muted);padding:.22rem .6rem;border-radius:6px;font-size:.7rem;cursor:pointer;transition:all .18s;font-family:'DM Sans';white-space:nowrap}
+.sort-btn{background:var(--s2);border:1px solid var(--bd);color:var(--muted);padding:.22rem .6rem;border-radius:6px;font-size:.7rem;cursor:pointer;transition:all .18s;font-family:'DM Sans',system-ui,sans-serif;white-space:nowrap}
 .sort-btn.active{background:rgba(201,150,58,.12);border-color:var(--gold);color:var(--gold)}
 
 /* ── GRID ── */
 .page{padding:2rem 1.5rem;max-width:1100px;margin:0 auto}
-.grid-title{font-family:'Playfair Display',serif;font-size:1.35rem;color:var(--cream);margin-bottom:.2rem}
+.grid-title{font-family:'Playfair Display',Georgia,serif;font-size:1.35rem;color:var(--cream);margin-bottom:.2rem}
 .grid-sub{color:var(--muted);font-size:.78rem;margin-bottom:1rem}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:1.2rem}
 
+/* ── SKELETONS (remplacement du spinner) ── */
+@keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
+.skeleton{background:linear-gradient(90deg,var(--s2) 25%,var(--bd) 50%,var(--s2) 75%);background-size:800px 100%;animation:shimmer 1.4s infinite linear;border-radius:6px}
+.skeleton-card{background:var(--s1);border:1px solid var(--bd);border-radius:10px;overflow:hidden}
+.skeleton-cover{aspect-ratio:3/4;width:100%}
+.skeleton-body{padding:.8rem;display:flex;flex-direction:column;gap:.5rem}
+.skeleton-line{height:12px}
+.skeleton-line.short{width:60%}
+.skeleton-line.medium{width:80%}
+
+/* ── SYNC INDICATOR ── */
+.sync-dot{width:6px;height:6px;border-radius:50%;background:var(--gold);display:inline-block;animation:pulse-dot 1s ease-in-out infinite}
+@keyframes pulse-dot{0%,100%{opacity:.3}50%{opacity:1}}
+
 /* ── FEATURED SECTION ── */
 .featured-section{padding:1.5rem 1.5rem 0;max-width:1100px;margin:0 auto}
-.featured-title{font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--cream);margin-bottom:1rem;display:flex;align-items:center;gap:.5rem}
+.featured-title{font-family:'Playfair Display',Georgia,serif;font-size:1.1rem;color:var(--cream);margin-bottom:1rem;display:flex;align-items:center;gap:.5rem}
 .featured-scroll{display:flex;gap:1rem;overflow-x:auto;padding:.2rem .1rem 1rem;scrollbar-width:thin;scrollbar-color:var(--bd) transparent}
 .featured-scroll::-webkit-scrollbar{height:4px}
 .featured-scroll::-webkit-scrollbar-track{background:transparent}
@@ -286,18 +316,15 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .card-cover-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:top}
 .card-cover-overlay{position:absolute;inset:0;background:linear-gradient(to bottom,transparent 50%,rgba(0,0,0,.65) 100%)}
 .emo{font-size:2.3rem;position:relative;z-index:1}
-.init{font-family:'Playfair Display',serif;font-size:1.6rem;font-weight:800;color:var(--gold);opacity:.55;position:relative;z-index:1}
-
-/* badges sur les cartes */
+.init{font-family:'Playfair Display',Georgia,serif;font-size:1.6rem;font-weight:800;color:var(--gold);opacity:.55;position:relative;z-index:1}
 .has-file-badge{position:absolute;bottom:.5rem;left:.5rem;background:var(--green);color:#fff;font-size:.58rem;font-weight:700;padding:.15rem .4rem;border-radius:4px;z-index:2;letter-spacing:.03em}
 .new-badge{position:absolute;top:.5rem;left:.5rem;background:var(--om);color:#fff;font-size:.6rem;font-weight:700;padding:.15rem .45rem;border-radius:4px;z-index:2;text-transform:uppercase;letter-spacing:.04em}
 .featured-badge{position:absolute;top:.5rem;left:.5rem;background:var(--gold);color:#0f0d0b;font-size:.6rem;font-weight:700;padding:.15rem .45rem;border-radius:4px;z-index:2;text-transform:uppercase}
 .wish-btn{position:absolute;top:.45rem;right:.45rem;background:rgba(0,0,0,.55);border:none;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:.82rem;z-index:3;transition:transform .18s;backdrop-filter:blur(4px)}
 .wish-btn:hover{transform:scale(1.2)}
-
 .card-body{padding:.8rem}
 .cat-tag{font-size:.6rem;text-transform:uppercase;letter-spacing:.12em;color:var(--gold);margin-bottom:.22rem}
-.title{font-family:'Playfair Display',serif;font-size:.93rem;font-weight:700;color:var(--cream);line-height:1.25;margin-bottom:.18rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.title{font-family:'Playfair Display',Georgia,serif;font-size:.93rem;font-weight:700;color:var(--cream);line-height:1.25;margin-bottom:.18rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .author{font-size:.73rem;color:var(--muted);margin-bottom:.6rem}
 .card-foot{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.4rem}
 .price{font-weight:700;color:var(--gold);font-size:.98rem}
@@ -308,12 +335,12 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 /* ── MODALS ── */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(5px);z-index:200;display:flex;align-items:center;justify-content:center;padding:1rem}
 .modal{background:var(--s1);border:1px solid var(--bd);border-radius:14px;padding:1.8rem;max-width:520px;width:100%;max-height:92vh;overflow-y:auto}
-.modal h2{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cream);margin-bottom:1.2rem}
+.modal h2{font-family:'Playfair Display',Georgia,serif;font-size:1.3rem;color:var(--cream);margin-bottom:1.2rem}
 .mc{float:right;background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.2rem;transition:color .18s}
 .mc:hover{color:var(--text)}
 .fg{margin-bottom:.9rem}
 .fl{display:block;font-size:.7rem;color:var(--muted);margin-bottom:.28rem;text-transform:uppercase;letter-spacing:.06em}
-.fi,.fs,.ft{width:100%;background:var(--s2);border:1px solid var(--bd);color:var(--text);padding:.58rem .82rem;border-radius:7px;font-family:'DM Sans';font-size:.86rem;outline:none;transition:border-color .2s}
+.fi,.fs,.ft{width:100%;background:var(--s2);border:1px solid var(--bd);color:var(--text);padding:.58rem .82rem;border-radius:7px;font-family:'DM Sans',system-ui,sans-serif;font-size:.86rem;outline:none;transition:border-color .2s}
 .fi:focus,.fs:focus,.ft:focus{border-color:var(--gold)}
 .fi.err-field{border-color:var(--red)}
 .ft{resize:vertical;min-height:72px}.fs option{background:var(--s2)}
@@ -321,8 +348,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .fa{display:flex;gap:.6rem;justify-content:flex-end;margin-top:1.3rem}
 .err{color:#f08080;font-size:.76rem;margin-top:.32rem}
 .field-err{color:#f08080;font-size:.72rem;margin-top:.2rem}
-
-/* upload */
 .upload-zone{border:2px dashed var(--bd);border-radius:8px;padding:1.2rem;text-align:center;cursor:pointer;transition:border-color .2s;position:relative}
 .upload-zone:hover{border-color:var(--gold)}
 .upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer}
@@ -337,8 +362,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .cover-preview{width:100%;max-height:200px;object-fit:contain;object-position:top;border-radius:6px;margin-top:.5rem;border:1px solid var(--bd)}
 .ai-row{display:flex;align-items:center;gap:.5rem;font-size:.76rem;color:var(--gold);margin:.3rem 0 .6rem;background:rgba(201,150,58,.07);padding:.4rem .7rem;border-radius:6px}
 .ai-analysis-box{background:rgba(201,150,58,.05);border:1px solid rgba(201,150,58,.18);border-radius:8px;padding:.8rem 1rem;margin-bottom:.9rem;font-size:.78rem;color:var(--muted)}
-
-/* promo */
 .promo-row{display:flex;gap:.5rem;align-items:stretch;margin-bottom:.7rem}
 .promo-row .fi{margin:0}
 .promo-applied{background:rgba(39,174,96,.08);border:1px solid rgba(39,174,96,.3);border-radius:7px;padding:.45rem .85rem;font-size:.8rem;color:var(--green);display:flex;align-items:center;justify-content:space-between;margin-bottom:.8rem}
@@ -348,7 +371,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .cart-side.open{transform:translateX(0)}
 .co{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:299}
 .ch{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.3rem}
-.ct{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--cream)}
+.ct{font-family:'Playfair Display',Georgia,serif;font-size:1.2rem;color:var(--cream)}
 .ci-list{flex:1;overflow-y:auto}
 .ci{display:flex;gap:.9rem;padding:.7rem 0;border-bottom:1px solid var(--bd)}
 .ci-info{flex:1}
@@ -367,7 +390,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .om-box{background:linear-gradient(135deg,#ff6600,#ff8c00);border-radius:10px;padding:.9rem 1.1rem;margin-bottom:1rem;display:flex;align-items:center;gap:.8rem}
 .om-info{flex:1}
 .om-title{font-weight:700;color:#fff;font-size:.88rem;margin-bottom:.1rem}
-.om-num{font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:800;color:#fff;letter-spacing:.04em}
+.om-num{font-family:'Playfair Display',Georgia,serif;font-size:1.1rem;font-weight:800;color:#fff;letter-spacing:.04em}
 .om-sub{font-size:.67rem;color:rgba(255,255,255,.8);margin-top:.1rem}
 .om-copy{background:rgba(255,255,255,.25);border:none;border-radius:6px;padding:.32rem .6rem;font-size:.7rem;color:#fff;cursor:pointer;font-weight:600}
 .om-copy:hover{background:rgba(255,255,255,.4)}
@@ -395,23 +418,23 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 /* ── PENDING / CHECK PAGES ── */
 .pending-page{max-width:460px;margin:3rem auto;padding:0 1.5rem;text-align:center}
 .pending-page .big-icon{font-size:3.5rem;margin-bottom:.9rem}
-.pending-page h2{font-family:'Playfair Display',serif;font-size:1.8rem;color:var(--cream);margin-bottom:.6rem}
+.pending-page h2{font-family:'Playfair Display',Georgia,serif;font-size:1.8rem;color:var(--cream);margin-bottom:.6rem}
 .pending-page p{color:var(--muted);font-size:.88rem;line-height:1.6;margin-bottom:1.3rem}
 .info-box{background:rgba(201,150,58,.06);border:1px solid rgba(201,150,58,.2);border-radius:8px;padding:.85rem 1rem;font-size:.8rem;color:var(--muted);text-align:left;line-height:1.8;margin-bottom:1.3rem}
 .info-box strong{color:var(--text)}
 .pin-highlight{background:var(--s2);border:2px solid var(--gold);border-radius:8px;padding:.6rem 1rem;font-size:1.1rem;font-weight:700;color:var(--gold);letter-spacing:.2em;text-align:center;margin:.5rem 0 1rem;font-family:monospace}
 .check-page{max-width:420px;margin:3rem auto;padding:0 1.5rem}
-.check-page h2{font-family:'Playfair Display',serif;font-size:1.7rem;color:var(--cream);margin-bottom:.5rem;text-align:center}
+.check-page h2{font-family:'Playfair Display',Georgia,serif;font-size:1.7rem;color:var(--cream);margin-bottom:.5rem;text-align:center}
 .dl-card{background:var(--s1);border:1px solid var(--bd);border-radius:12px;padding:1.3rem;margin-bottom:1.1rem}
 .dl-formats{display:flex;gap:.5rem;flex-wrap:wrap}
 .pin-input{letter-spacing:.3em;text-align:center;font-size:1.1rem;font-weight:700;font-family:monospace}
-.copy-sum{background:var(--s2);border:1px solid var(--bd);color:var(--muted);padding:.28rem .7rem;border-radius:6px;font-size:.72rem;cursor:pointer;transition:all .18s;font-family:'DM Sans'}
+.copy-sum{background:var(--s2);border:1px solid var(--bd);color:var(--muted);padding:.28rem .7rem;border-radius:6px;font-size:.72rem;cursor:pointer;transition:all .18s;font-family:'DM Sans',system-ui,sans-serif}
 .copy-sum:hover{border-color:var(--gold);color:var(--gold)}
 
 /* ── ADMIN ── */
 .admin-tabs{display:flex;gap:.5rem;border-bottom:1px solid var(--bd);margin-bottom:1.6rem;overflow-x:auto;scrollbar-width:none}
 .admin-tabs::-webkit-scrollbar{display:none}
-.tab{background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);padding:.52rem .88rem;cursor:pointer;font-family:'DM Sans';font-size:.82rem;font-weight:500;transition:all .18s;margin-bottom:-1px;white-space:nowrap}
+.tab{background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);padding:.52rem .88rem;cursor:pointer;font-family:'DM Sans',system-ui,sans-serif;font-size:.82rem;font-weight:500;transition:all .18s;margin-bottom:-1px;white-space:nowrap}
 .tab.active{color:var(--gold);border-bottom-color:var(--gold)}
 .tab:hover:not(.active){color:var(--text)}
 .order-row{background:var(--s1);border:1px solid var(--bd);border-radius:10px;padding:.95rem 1.1rem;margin-bottom:.85rem}
@@ -421,38 +444,27 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .order-items{font-size:.77rem;color:var(--muted);margin-bottom:.65rem;line-height:1.5}
 .order-tx{font-size:.73rem;background:var(--s2);border:1px solid var(--bd);border-radius:5px;padding:.22rem .55rem;color:var(--gold);font-family:monospace;display:inline-block;margin-top:.2rem}
 .order-actions{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.8rem}
-.search-input{width:100%;background:var(--s2);border:1px solid var(--bd);color:var(--text);padding:.58rem .82rem;border-radius:7px;font-family:'DM Sans';font-size:.84rem;outline:none;margin-bottom:1.1rem;transition:border-color .2s}
+.search-input{width:100%;background:var(--s2);border:1px solid var(--bd);color:var(--text);padding:.58rem .82rem;border-radius:7px;font-family:'DM Sans',system-ui,sans-serif;font-size:.84rem;outline:none;margin-bottom:1.1rem;transition:border-color .2s}
 .search-input:focus{border-color:var(--gold)}
-
-/* ── STATS DASHBOARD ── */
 .stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:.9rem;margin-bottom:1.8rem}
 .stat-card{background:var(--s1);border:1px solid var(--bd);border-radius:10px;padding:1rem .9rem;text-align:center;transition:border-color .2s}
-.stat-card:hover{border-color:var(--bd)}
 .stat-icon{font-size:1.4rem;margin-bottom:.4rem}
-.stat-val{font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;color:var(--gold);margin-bottom:.2rem;line-height:1.1}
+.stat-val{font-family:'Playfair Display',Georgia,serif;font-size:1.3rem;font-weight:700;color:var(--gold);margin-bottom:.2rem;line-height:1.1}
 .stat-lbl{font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 .top-book-row{display:flex;align-items:center;gap:.8rem;padding:.6rem .9rem;background:var(--s1);border:1px solid var(--bd);border-radius:8px;margin-bottom:.6rem}
-
-/* ── PROMO CODES ── */
 .promo-code-row{background:var(--s1);border:1px solid var(--bd);border-radius:9px;padding:.8rem 1rem;margin-bottom:.7rem;display:flex;align-items:center;gap:.8rem;flex-wrap:wrap}
 .promo-code-label{font-family:monospace;font-size:1rem;font-weight:700;min-width:80px}
 .promo-form{background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:1.2rem;margin-bottom:1.5rem}
-
-/* ── DETAIL MODAL ── */
 .detail-cover{width:120px;flex-shrink:0;aspect-ratio:3/4;border-radius:8px;overflow:hidden;border:1px solid var(--bd);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:2.5rem}
 .detail-cover img{width:100%;height:100%;object-fit:cover;object-position:top}
-.detail-title{font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:800;color:var(--cream);line-height:1.2;margin-bottom:.4rem}
+.detail-title{font-family:'Playfair Display',Georgia,serif;font-size:1.3rem;font-weight:800;color:var(--cream);line-height:1.2;margin-bottom:.4rem}
 .detail-author{color:var(--muted);font-size:.84rem;margin-bottom:.6rem}
 .detail-price{color:var(--gold);font-size:1.4rem;font-weight:700;margin-bottom:.9rem}
 .detail-desc{background:var(--s2);border-radius:8px;padding:.9rem 1rem;font-size:.84rem;color:var(--muted);line-height:1.75;margin-top:.9rem}
-
-/* ── WHATSAPP FAB ── */
 .wa-fab{position:fixed;bottom:1.5rem;right:1.5rem;background:#25D366;border:none;border-radius:50%;width:52px;height:52px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,.45);z-index:150;font-size:1.5rem;transition:transform .2s,box-shadow .2s;text-decoration:none}
 .wa-fab:hover{transform:scale(1.1);box-shadow:0 6px 28px rgba(37,211,102,.4)}
 .wa-tooltip{position:absolute;right:calc(100% + .6rem);background:var(--s1);border:1px solid var(--bd);color:var(--text);padding:.3rem .7rem;border-radius:6px;font-size:.74rem;white-space:nowrap;opacity:0;transition:opacity .2s;pointer-events:none}
 .wa-fab:hover .wa-tooltip{opacity:1}
-
-/* ── MISC ── */
 hr.div{border:none;border-top:1px solid var(--bd);margin:1rem 0}
 @media(max-width:480px){
   .nav{padding:0 .9rem;height:55px}
@@ -466,12 +478,30 @@ hr.div{border:none;border-top:1px solid var(--bd);margin:1rem 0}
 `;
 
 // ─────────────────────────────────────────────────────────────
+// SKELETON CARD — affiché pendant la synchro Firebase
+// ─────────────────────────────────────────────────────────────
+const SkeletonCard = () => (
+  <div className="skeleton-card">
+    <div className="skeleton skeleton-cover" />
+    <div className="skeleton-body">
+      <div className="skeleton skeleton-line short" />
+      <div className="skeleton skeleton-line medium" />
+      <div className="skeleton skeleton-line short" />
+    </div>
+  </div>
+);
+
+// ─────────────────────────────────────────────────────────────
 // COMPOSANT PRINCIPAL
 // ─────────────────────────────────────────────────────────────
 export default function App() {
   // ── Firebase state ──
-  const [books,       setBooks]       = useState([]);
-  const [loading,     setLoading]     = useState(true);
+  // PERF: initialiser avec le cache localStorage → rendu immédiat
+  const [books,       setBooks]       = useState(loadCachedBooks);
+  // PERF: loading=false si on a un cache, sinon true (1re visite)
+  const [loading,     setLoading]     = useState(() => loadCachedBooks().length === 0);
+  // PERF: syncing = true pendant la synchro Firebase (silencieuse si cache présent)
+  const [syncing,     setSyncing]     = useState(true);
   const [adminOrders, setAdminOrders] = useState([]);
   const [promoCodes,  setPromoCodes]  = useState([]);
 
@@ -526,13 +556,20 @@ export default function App() {
   const emptyPromo = { code:"", discount:"", type:"percent", maxUses:"100" };
   const [promoForm, setPromoForm] = useState(emptyPromo);
 
-  // ─── Firebase: books ───────────────────────────────────────
+  // ─── Firebase: books — CACHE-FIRST ────────────────────────
+  // Si cache présent → loading=false dès le départ, Firebase met à jour silencieusement
   useEffect(() => {
     const unsub = onValue(ref(db,"books"), snap => {
       const data = snap.val();
-      setBooks(data ? Object.entries(data).map(([k,v])=>({...v,fbKey:k})) : []);
+      const fresh = data
+        ? Object.entries(data).map(([k,v]) => ({ ...v, fbKey: k }))
+        : [];
+      setBooks(fresh);
       setLoading(false);
-    }, () => setLoading(false));
+      setSyncing(false);
+      // Sauvegarde du cache (sans fileData pour économiser la place)
+      saveBooksCache(fresh);
+    }, () => { setLoading(false); setSyncing(false); });
     return () => unsub();
   }, []);
 
@@ -541,7 +578,9 @@ export default function App() {
     if (!isAdmin) return;
     const unsub = onValue(ref(db,"orders"), snap => {
       const data = snap.val();
-      setAdminOrders(data ? Object.entries(data).map(([k,v])=>({...v,fbKey:k})).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)) : []);
+      setAdminOrders(data
+        ? Object.entries(data).map(([k,v])=>({...v,fbKey:k})).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0))
+        : []);
     });
     return () => unsub();
   }, [isAdmin]);
@@ -555,7 +594,7 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // ─── Keyboard: Escape ferme modals ────────────────────────
+  // ─── Keyboard: Escape ─────────────────────────────────────
   useEffect(() => {
     const h = e => { if (e.key==="Escape") { setModal(null); setCartOpen(false); } };
     window.addEventListener("keydown", h);
@@ -715,7 +754,6 @@ export default function App() {
   };
 
   const doCheckout = async () => {
-    // validation
     const errs = {};
     if (!checkF.name.trim())                         errs.name  = "Nom requis";
     if (!checkF.phone.trim())                        errs.phone = "Téléphone requis";
@@ -724,11 +762,8 @@ export default function App() {
     else if (!validTx(checkF.txId))                  errs.txId  = "Minimum 4 caractères";
     if (!/^\d{4}$/.test(checkF.pin))                 errs.pin   = "PIN à 4 chiffres requis";
     if (Object.keys(errs).length) { setCheckErrs(errs); return; }
-
-    // Rate limit
     if (!canOrder()) { toast$("Trop de tentatives — réessayez dans 10 minutes","er"); return; }
 
-    // Vérification txId dupliqué
     try {
       const snap = await get(ref(db,"orders"));
       const data = snap.val();
@@ -750,7 +785,6 @@ export default function App() {
 
     try {
       const newRef = await push(ref(db,"orders"), orderData);
-      // Incrémenter le compteur du code promo
       if (appliedPromo) {
         await update(ref(db,`promoCodes/${appliedPromo.fbKey}`), {uses:(appliedPromo.uses||0)+1});
       }
@@ -865,17 +899,15 @@ export default function App() {
   // ─────────────────────────────────────────────────────────────
   // COMPOSANT CARTE LIVRE
   // ─────────────────────────────────────────────────────────────
-  const BookCard = ({ b, admin, compact }) => (
+  const BookCard = ({ b, admin }) => (
     <div className="card" onClick={() => { setDetailBook(b); setModal("detail"); }}>
       <div className="card-cover">
         {b.coverImage
-          ? <><img src={b.coverImage} alt={b.title} className="card-cover-img"/><div className="card-cover-overlay"/></>
+          ? <><img src={b.coverImage} alt={b.title} className="card-cover-img" loading="lazy"/><div className="card-cover-overlay"/></>
           : <><span className="emo">{b.emoji||"📚"}</span><span className="init">{b.title?.[0]}</span></>}
-        {/* Badges */}
         {b.featured && !isNew7d(b.createdAt) && <span className="featured-badge">⭐ Coup de cœur</span>}
         {isNew7d(b.createdAt) && <span className="new-badge">🆕 Nouveau</span>}
         {b.hasFile && <span className="has-file-badge">PDF ✓</span>}
-        {/* Wishlist btn */}
         <button className="wish-btn" onClick={e=>{e.stopPropagation();toggleWish(b.fbKey);}}>
           {wishlist.includes(b.fbKey)?"❤️":"🤍"}
         </button>
@@ -911,7 +943,7 @@ export default function App() {
   // ─────────────────────────────────────────────────────────────
   return (
     <>
-      <style>{FONTS}{CSS}</style>
+      <style>{CSS}</style>
 
       {/* ── NAV ── */}
       <nav className="nav">
@@ -988,11 +1020,14 @@ export default function App() {
         <div className="page">
           <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",flexWrap:"wrap",gap:".5rem",marginBottom:".6rem"}}>
             <div>
-              <div className="grid-title">Catalogue</div>
+              <div className="grid-title">
+                Catalogue
+                {/* Indicateur discret de synchro Firebase */}
+                {syncing && <span title="Synchronisation en cours…" style={{marginLeft:".5rem",verticalAlign:"middle"}}><span className="sync-dot"/></span>}
+              </div>
               <div className="grid-sub">{filtered.length} livre{filtered.length!==1?"s":""} disponible{filtered.length!==1?"s":""}</div>
             </div>
           </div>
-          {/* Tri */}
           <div className="sort-bar">
             <span className="sort-lbl">Tri :</span>
             {SORT_OPTS.map(s=>(
@@ -1002,8 +1037,11 @@ export default function App() {
             ))}
           </div>
 
+          {/* PREMIER CHARGEMENT (aucun cache) → skeletons */}
           {loading ? (
-            <div className="loading-screen"><span className="big spin">📚</span><p>Chargement du catalogue…</p></div>
+            <div className="grid">
+              {Array.from({length:8}).map((_,i)=><SkeletonCard key={i}/>)}
+            </div>
           ) : filtered.length===0 ? (
             <div className="empty">
               <div style={{fontSize:"2.8rem",marginBottom:".8rem"}}>{activeCat==="__wish__"?"❤️":"📭"}</div>
@@ -1022,7 +1060,7 @@ export default function App() {
         <div className="page">
           <div style={{display:"flex",alignItems:"center",gap:"1rem",marginBottom:"1.5rem",flexWrap:"wrap"}}>
             <button className="btn btn-ghost btn-sm" onClick={()=>setView("home")}>← Retour</button>
-            <span style={{fontFamily:"'Playfair Display',serif",fontSize:"1.35rem",color:"var(--cream)"}}>Administration</span>
+            <span style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:"1.35rem",color:"var(--cream)"}}>Administration</span>
           </div>
           <div className="admin-tabs">
             <button className={`tab ${adminTab==="stats"?"active":""}`}    onClick={()=>setAdminTab("stats")}>📊 Stats</button>
@@ -1033,7 +1071,6 @@ export default function App() {
             <button className={`tab ${adminTab==="promos"?"active":""}`}   onClick={()=>setAdminTab("promos")}>🏷️ Promos</button>
           </div>
 
-          {/* ── STATS ── */}
           {adminTab==="stats"&&<>
             <div className="stats-grid">
               {[
@@ -1072,7 +1109,6 @@ export default function App() {
             )}
           </>}
 
-          {/* ── CATALOGUE ── */}
           {adminTab==="books"&&<>
             <div style={{display:"flex",gap:".7rem",marginBottom:"1.2rem",alignItems:"center",flexWrap:"wrap"}}>
               <button className="btn btn-gold" onClick={openAdd}>+ Nouveau livre</button>
@@ -1083,7 +1119,6 @@ export default function App() {
               :<div className="grid">{filteredAdminBooks.map(b=><BookCard key={b.fbKey} b={b} admin={true}/>)}</div>}
           </>}
 
-          {/* ── COMMANDES ── */}
           {adminTab==="orders"&&<>
             <div style={{display:"flex",gap:".7rem",marginBottom:"1rem",flexWrap:"wrap"}}>
               <input className="search-input" style={{flex:1,marginBottom:0}} placeholder="Rechercher par nom, téléphone, ID transaction…" value={orderSearch} onChange={e=>setOrderSearch(e.target.value)}/>
@@ -1130,10 +1165,9 @@ export default function App() {
             ))}
           </>}
 
-          {/* ── CODES PROMO ── */}
           {adminTab==="promos"&&<>
             <div className="promo-form">
-              <div style={{fontFamily:"'Playfair Display',serif",fontSize:"1.1rem",color:"var(--cream)",marginBottom:"1rem"}}>🏷️ Créer un code promo</div>
+              <div style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:"1.1rem",color:"var(--cream)",marginBottom:"1rem"}}>🏷️ Créer un code promo</div>
               <div className="fr">
                 <div className="fg">
                   <label className="fl">Code</label>
@@ -1162,7 +1196,6 @@ export default function App() {
               </div>
               <button className="btn btn-gold" onClick={addPromoCode}>+ Créer le code</button>
             </div>
-
             {promoCodes.length===0&&<div className="empty"><p>Aucun code promo créé</p></div>}
             {[...promoCodes].sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(p=>(
               <div key={p.fbKey} className="promo-code-row">
@@ -1233,7 +1266,6 @@ export default function App() {
           <button className="btn btn-gold" style={{width:"100%",marginBottom:"1.2rem"}} onClick={checkMyOrders} disabled={checkingOrders}>
             {checkingOrders?<><span className="spin">⚙️</span> Recherche…</>:"🔍 Afficher mes commandes"}
           </button>
-
           {myOrders!==null&&myOrders.length===0&&(
             <div style={{textAlign:"center",color:"var(--muted)",padding:"2rem 0"}}>Aucune commande trouvée avec ces identifiants.</div>
           )}
@@ -1332,8 +1364,6 @@ export default function App() {
       ════════════════════════════════════ */}
       {modal&&(
         <div className="overlay" onClick={e=>{ if(e.target===e.currentTarget) setModal(null); }}>
-
-          {/* ── LOGIN ── */}
           {modal==="login"&&(
             <div className="modal" style={{maxWidth:340}}>
               <button className="mc" onClick={()=>setModal(null)}>✕</button>
@@ -1352,7 +1382,6 @@ export default function App() {
             </div>
           )}
 
-          {/* ── DETAIL LIVRE ── */}
           {modal==="detail"&&detailBook&&(
             <div className="modal" style={{maxWidth:560}}>
               <button className="mc" onClick={()=>setModal(null)}>✕</button>
@@ -1390,12 +1419,10 @@ export default function App() {
             </div>
           )}
 
-          {/* ── AJOUTER / MODIFIER LIVRE ── */}
           {(modal==="add"||modal==="edit")&&(
             <div className="modal">
               <button className="mc" onClick={()=>setModal(null)}>✕</button>
               <h2>{modal==="add"?"📚 Ajouter un livre":"✏️ Modifier"}</h2>
-
               <div className="fg">
                 <label className="fl">📁 Fichier PDF / EPUB (max 9 Mo) — <span style={{color:"var(--gold)"}}>l'IA remplit tout automatiquement</span></label>
                 {!uploadedFile?(
@@ -1414,16 +1441,13 @@ export default function App() {
                 )}
                 {modal==="edit"&&editB?.hasFile&&!uploadedFile&&<p style={{fontSize:".7rem",color:"var(--green)",marginTop:".3rem"}}>✅ Fichier déjà associé.</p>}
               </div>
-
               {aiLoading&&<div className="ai-row"><span className="spin">⚙️</span> IA : extraction couverture + analyse…</div>}
-
               {extractedCover&&!aiLoading&&(
                 <div className="ai-analysis-box">
                   <div style={{fontSize:".74rem",color:"var(--gold)",marginBottom:".4rem"}}>📸 Couverture extraite</div>
                   <img src={extractedCover} alt="Couverture" className="cover-preview"/>
                 </div>
               )}
-
               <div className="fg">
                 <label className="fl">Titre *</label>
                 <input className={`fi ${formFieldErrs.title?"err-field":""}`} name="title" value={form.title} onChange={chForm} onBlur={handleBlur} placeholder="Titre du livre"/>
@@ -1459,7 +1483,6 @@ export default function App() {
                 <label className="fl">Description</label>
                 <textarea className="ft" name="desc" value={form.desc} onChange={chForm} placeholder="Résumé…"/>
               </div>
-
               {formErr&&<div className="err">{formErr}</div>}
               <div className="fa">
                 <button className="btn btn-ghost" onClick={()=>setModal(null)}>Annuler</button>
@@ -1470,7 +1493,6 @@ export default function App() {
             </div>
           )}
 
-          {/* ── SUPPRIMER ── */}
           {modal==="del"&&(
             <div className="modal" style={{maxWidth:360}}>
               <h2>🗑️ Supprimer ?</h2>
@@ -1484,13 +1506,10 @@ export default function App() {
             </div>
           )}
 
-          {/* ── CHECKOUT ── */}
           {modal==="checkout"&&(
             <div className="modal">
               <button className="mc" onClick={()=>setModal(null)}>✕</button>
               <h2>🛒 Commander</h2>
-
-              {/* Récap panier */}
               <div style={{background:"var(--s2)",border:"1px solid var(--bd)",borderRadius:8,padding:".7rem .9rem",marginBottom:"1rem"}}>
                 {cart.map(i=>(
                   <div key={i.fbKey} style={{display:"flex",justifyContent:"space-between",fontSize:".8rem",marginBottom:".25rem"}}>
@@ -1513,8 +1532,6 @@ export default function App() {
                   </div>
                 )}
               </div>
-
-              {/* Code promo */}
               {!appliedPromo?(
                 <div className="fg">
                   <label className="fl">Code promo (optionnel)</label>
@@ -1531,8 +1548,6 @@ export default function App() {
                     onClick={()=>{ setAppliedPromo(null); setPromoInput(""); }}>✕</button>
                 </div>
               )}
-
-              {/* Orange Money */}
               <div className="om-box">
                 <span style={{fontSize:"1.7rem"}}>🟠</span>
                 <div className="om-info">
@@ -1542,12 +1557,10 @@ export default function App() {
                 </div>
                 <button className="om-copy" onClick={copyOM}>Copier</button>
               </div>
-
               {[["1","Ouvrez Orange Money"],["2","Transfert → "+OM_NUMBER],["3","Montant : "+fmtGNF(discountedTotal)],["4","Notez le code SMS de confirmation"],["5","Remplissez le formulaire ci-dessous"]].map(([n,t])=>(
                 <div key={n} className="step"><span className="sn">{n}</span><span>{t}</span></div>
               ))}
               <hr className="div"/>
-
               <div className="fg">
                 <label className="fl">Nom complet *</label>
                 <input className={`fi ${checkErrs.name?"err-field":""}`} value={checkF.name}
@@ -1574,7 +1587,6 @@ export default function App() {
                 <div style={{fontSize:".68rem",color:"var(--muted)",marginTop:".25rem"}}>🔒 Ce PIN + votre téléphone protègent l'accès à vos téléchargements</div>
                 {checkErrs.pin&&<div className="field-err">{checkErrs.pin}</div>}
               </div>
-
               <div style={{background:"rgba(230,126,34,.08)",border:"1px solid rgba(230,126,34,.2)",borderRadius:7,padding:".65rem .9rem",fontSize:".74rem",color:"var(--muted)",marginBottom:".9rem"}}>
                 ⚠️ <strong style={{color:"var(--text)"}}>Accès après vérification</strong> — commande activée une fois le paiement confirmé (quelques heures).
               </div>
