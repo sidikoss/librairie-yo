@@ -209,56 +209,354 @@ async function loadPDFJS() {
     s.onerror=reject; document.head.appendChild(s);
   });
 }
+function pdfBytesFromBase64(b64) {
+  const payload = String(b64 || "").split(",")[1] || "";
+  const raw = atob(payload);
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  return bytes;
+}
+function foldText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function cleanLine(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
 async function extractPDFCover(b64) {
   try {
-    const pdfjs=await loadPDFJS();
-    const raw=atob(b64.split(",")[1]);
-    const bytes=new Uint8Array(raw.length);
-    for(let i=0;i<raw.length;i++) bytes[i]=raw.charCodeAt(i);
-    const pdf=await pdfjs.getDocument({data:bytes}).promise;
-    const page=await pdf.getPage(1);
-    const vp0=page.getViewport({scale:1});
-    const scale=Math.min(320/vp0.width,480/vp0.height);
-    const vp=page.getViewport({scale});
-    const canvas=document.createElement("canvas");
-    canvas.width=vp.width; canvas.height=vp.height;
-    await page.render({canvasContext:canvas.getContext("2d"),viewport:vp}).promise;
-    return canvas.toDataURL("image/jpeg",0.72);
+    const pdfjs = await loadPDFJS();
+    const bytes = pdfBytesFromBase64(b64);
+    const pdf = await pdfjs.getDocument({ data: bytes }).promise;
+    const page = await pdf.getPage(1);
+    const vp0 = page.getViewport({ scale: 1 });
+    const scale = Math.min(320 / vp0.width, 480 / vp0.height);
+    const vp = page.getViewport({ scale });
+    const canvas = document.createElement("canvas");
+    canvas.width = vp.width; canvas.height = vp.height;
+    await page.render({ canvasContext: canvas.getContext("2d"), viewport: vp }).promise;
+    return canvas.toDataURL("image/jpeg", 0.72);
   } catch { return null; }
 }
 async function extractPDFPageCount(b64) {
   try {
-    const pdfjs=await loadPDFJS();
-    const raw=atob(b64.split(",")[1]);
-    const bytes=new Uint8Array(raw.length);
-    for(let i=0;i<raw.length;i++) bytes[i]=raw.charCodeAt(i);
-    const pdf=await pdfjs.getDocument({data:bytes}).promise;
+    const pdfjs = await loadPDFJS();
+    const bytes = pdfBytesFromBase64(b64);
+    const pdf = await pdfjs.getDocument({ data: bytes }).promise;
     return pdf.numPages;
   } catch { return null; }
 }
-async function analyzeBookPDF(b64) {
+async function extractPDFFirstPageText(b64) {
   try {
-    const base64=b64.split(",")[1];
-    const r=await fetch("https://api.anthropic.com/v1/messages",{
-      method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:700,messages:[{role:"user",content:[
-        {type:"document",source:{type:"base64",media_type:"application/pdf",data:base64}},
-        {type:"text",text:`Analyse ce livre PDF et retourne UNIQUEMENT un objet JSON valide (sans backticks ni markdown) avec exactement ces champs:\n{"title":"titre exact","author":"auteur complet","cat":"EXACTEMENT une parmi: ${CATS.join(", ")}","desc":"description vendeuse de 2-3 phrases en français qui donne envie d'acheter"}\nNe réponds QU'avec le JSON brut.`}
-      ]}]})
+    const pdfjs = await loadPDFJS();
+    const bytes = pdfBytesFromBase64(b64);
+    const pdf = await pdfjs.getDocument({ data: bytes }).promise;
+    const page = await pdf.getPage(1);
+    const tc = await page.getTextContent();
+    const chunks = [];
+    for (const item of (tc?.items || [])) {
+      if (item?.str) chunks.push(item.str);
+      if (item?.hasEOL) chunks.push("\n");
+    }
+    return chunks.join(" ").replace(/[ \t]+\n/g, "\n").replace(/\n[ \t]+/g, "\n").trim();
+  } catch { return ""; }
+}
+
+function parsePdfCoverHints(firstPageText, fallbackName = "") {
+  const fallbackTitle = cleanLine(
+    String(fallbackName || "")
+      .replace(/\.[^.]+$/, "")
+      .replace(/[_-]+/g, " ")
+      .replace(/\d{2,}/g, " ")
+  );
+
+  const lines = String(firstPageText || "")
+    .split(/\r?\n/)
+    .map(cleanLine)
+    .filter(Boolean)
+    .filter(line => line.length >= 3 && line.length <= 120)
+    .slice(0, 16);
+
+  const title = lines.find(line =>
+    !/^(par|by|de)\s+/i.test(line) &&
+    !/(isbn|copyright|all rights reserved|www\.|http)/i.test(line)
+  ) || fallbackTitle || "";
+
+  const byline = lines.find(line => /^(par|by|de)\s+/i.test(line))
+    || lines.find(line => /^(auteur|author)\s*[:\-]/i.test(line))
+    || "";
+
+  let author = byline
+    .replace(/^(par|by|de)\s+/i, "")
+    .replace(/^(auteur|author)\s*[:\-]\s*/i, "")
+    .trim();
+
+  if (!author) {
+    author = lines.find(line => {
+      const words = line.split(" ").filter(Boolean);
+      if (words.length < 2 || words.length > 5) return false;
+      if (line.length > 60) return false;
+      return /^[A-Za-zÀ-ÖØ-öø-ÿ'`.-]+(?: [A-Za-zÀ-ÖØ-öø-ÿ'`.-]+)+$/.test(line);
+    }) || "";
+  }
+
+  return { title: cleanLine(title), author: cleanLine(author), firstPageText: String(firstPageText || "") };
+}
+
+async function fetchJSONWithTimeout(url, ms = 7000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function toBookCandidate(source, raw = {}) {
+  return {
+    source,
+    title: cleanLine(raw.title),
+    author: cleanLine(raw.author),
+    categories: Array.isArray(raw.categories) ? raw.categories.map(cleanLine).filter(Boolean) : [],
+    pageCount: Number(raw.pageCount) || null,
+    description: cleanLine(raw.description || ""),
+  };
+}
+
+function scoreCandidate(candidate, titleHint, authorHint) {
+  const tHint = foldText(titleHint);
+  const aHint = foldText(authorHint);
+  const tCand = foldText(candidate?.title);
+  const aCand = foldText(candidate?.author);
+  let score = 0;
+
+  if (tHint && tCand) {
+    if (tHint === tCand) score += 65;
+    else if (tCand.includes(tHint) || tHint.includes(tCand)) score += 40;
+    else {
+      const tokens = tHint.split(" ").filter(t => t.length > 3);
+      const overlap = tokens.filter(t => tCand.includes(t)).length;
+      score += overlap * 8;
+    }
+  }
+
+  if (aHint && aCand) {
+    if (aHint === aCand) score += 30;
+    else if (aCand.includes(aHint) || aHint.includes(aCand)) score += 20;
+    else {
+      const tokens = aHint.split(" ").filter(t => t.length > 2);
+      const overlap = tokens.filter(t => aCand.includes(t)).length;
+      score += overlap * 5;
+    }
+  }
+
+  if (candidate?.description) score += 4;
+  if (candidate?.categories?.length) score += 4;
+  if (candidate?.pageCount) score += 2;
+  if (candidate?.source === "google") score += 1;
+  return score;
+}
+
+function pickBestCandidate(candidates, titleHint, authorHint) {
+  const list = (candidates || [])
+    .filter(c => c?.title)
+    .map(c => ({ ...c, _score: scoreCandidate(c, titleHint, authorHint) }))
+    .sort((a, b) => b._score - a._score);
+  return list[0] || null;
+}
+
+async function searchGoogleBooks(titleHint, authorHint) {
+  const q = [];
+  if (titleHint) q.push(`intitle:${titleHint}`);
+  if (authorHint) q.push(`inauthor:${authorHint}`);
+  if (!q.length) return [];
+
+  const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q.join(" "))}&maxResults=8&projection=lite&printType=books`;
+  const data = await fetchJSONWithTimeout(url, 8000);
+  const items = Array.isArray(data?.items) ? data.items : [];
+  return items.map(item => {
+    const info = item?.volumeInfo || {};
+    return toBookCandidate("google", {
+      title: info.title || "",
+      author: Array.isArray(info.authors) ? info.authors[0] : "",
+      categories: info.categories || [],
+      pageCount: info.pageCount,
+      description: info.description || "",
     });
-    const d=await r.json();
-    const txt=d?.content?.[0]?.text?.trim()||"{}";
-    return JSON.parse(txt.replace(/```[\w]*\n?|```/g,"").trim());
+  });
+}
+
+async function searchOpenLibrary(titleHint, authorHint) {
+  const params = [];
+  if (titleHint) params.push(`title=${encodeURIComponent(titleHint)}`);
+  if (authorHint) params.push(`author=${encodeURIComponent(authorHint)}`);
+  params.push("limit=8");
+  const url = `https://openlibrary.org/search.json?${params.join("&")}`;
+  const data = await fetchJSONWithTimeout(url, 8000);
+  const docs = Array.isArray(data?.docs) ? data.docs : [];
+  return docs.map(doc => toBookCandidate("openlibrary", {
+    title: doc?.title || "",
+    author: Array.isArray(doc?.author_name) ? doc.author_name[0] : "",
+    categories: Array.isArray(doc?.subject) ? doc.subject.slice(0, 6) : [],
+    pageCount: doc?.number_of_pages_median || null,
+    description: "",
+  }));
+}
+
+async function searchBookMetadata(titleHint, authorHint) {
+  const safeTitle = cleanLine(titleHint);
+  const safeAuthor = cleanLine(authorHint);
+  if (!safeTitle && !safeAuthor) return null;
+
+  const [google, openLibrary] = await Promise.all([
+    searchGoogleBooks(safeTitle, safeAuthor),
+    searchOpenLibrary(safeTitle, safeAuthor)
+  ]);
+
+  return pickBestCandidate([...google, ...openLibrary], safeTitle, safeAuthor);
+}
+
+function detectBookCategory({ title = "", author = "", categories = [], description = "", firstPageText = "" }) {
+  const catBy = idx => CATS[idx] || "Autre";
+  const corpus = foldText([title, author, categories.join(" "), description, firstPageText].join(" "));
+
+  const direct = (categories || [])
+    .map(c => foldText(c))
+    .find(c => c && CATS.some(cat => c.includes(foldText(cat)) || foldText(cat).includes(c)));
+  if (direct) {
+    const exact = CATS.find(cat => direct.includes(foldText(cat)) || foldText(cat).includes(direct));
+    if (exact) return exact;
+  }
+
+  const rules = [
+    { cat: catBy(4), words: ["manga", "anime", "shonen", "shojo", "seinen", "manhwa"] },
+    { cat: catBy(7), words: ["informatique", "programmation", "developpeur", "code", "python", "javascript", "algorithm", "machine learning", "data", "cyber", "computer"] },
+    { cat: catBy(14), words: ["finance", "investissement", "investir", "bourse", "trading", "economie", "argent", "capital"] },
+    { cat: catBy(19), words: ["psychologie", "emotion", "mental", "comportement", "cognitif", "therapie"] },
+    { cat: catBy(6), words: ["developpement personnel", "motivation", "habitude", "discipline", "leadership", "mindset"] },
+    { cat: catBy(11), words: ["entrepreneur", "startup", "business", "entreprise", "marketing", "vente", "strategie"] },
+    { cat: catBy(5), words: ["religion", "spiritualite", "islam", "coran", "bible", "foi", "theologie"] },
+    { cat: catBy(17), words: ["geopolitique", "diplomatie", "geostrategie", "relations internationales", "conflit"] },
+    { cat: catBy(2), words: ["histoire", "historique", "guerre mondiale", "empire", "civilisation"] },
+    { cat: catBy(3), words: ["philosophie", "ethique", "metaphysique", "stoic", "existential"] },
+    { cat: catBy(1), words: ["science", "physique", "chimie", "biologie", "mathematique", "astronomie"] },
+    { cat: catBy(12), words: ["etudiant", "universite", "memoire", "cours", "td", "partiel"] },
+    { cat: catBy(13), words: ["lycee", "lyceen", "bac", "terminale", "premiere", "seconde"] },
+    { cat: catBy(18), words: ["langue", "anglais", "francais", "grammaire", "vocabulaire", "traduction"] },
+    { cat: catBy(15), words: ["sante", "bien etre", "nutrition", "sport", "medecine"] },
+    { cat: catBy(16), words: ["art", "creativite", "dessin", "design", "musique", "peinture"] },
+    { cat: catBy(10), words: ["biographie", "memoire", "autobiographie", "parcours", "temoignage"] },
+    { cat: catBy(8), words: ["jeunesse", "enfant", "adolescent", "conte", "scolaire"] },
+    { cat: catBy(9), words: ["poesie", "poeme", "vers", "sonnet"] },
+    { cat: catBy(0), words: ["roman", "fiction", "nouvelle", "litterature"] },
+  ];
+
+  for (const rule of rules) {
+    if (rule.words.some(word => corpus.includes(word))) return rule.cat;
+  }
+  return catBy(20);
+}
+
+function buildBookDescription({ title, author, cat, firstPageText, onlineDescription, onlineCategories, pageCount }) {
+  const safeTitle = cleanLine(title) || "Titre a confirmer";
+  const safeAuthor = cleanLine(author) || "Auteur a confirmer";
+  const safeCat = cleanLine(cat) || "Autre";
+  const cleanDesc = cleanLine(onlineDescription);
+  const firstSentence = cleanDesc ? `${cleanDesc.split(/[.!?]+/)[0].trim()}.` : "";
+
+  const hook = firstSentence || `Un ouvrage ${safeCat.toLowerCase()} qui capte l'attention des les premieres pages.`;
+  const points = [];
+  if (pageCount) points.push(`${pageCount} pages pour progresser avec une structure claire.`);
+  if (Array.isArray(onlineCategories) && onlineCategories.length) {
+    points.push(`Themes abordes: ${onlineCategories.slice(0, 2).map(cleanLine).filter(Boolean).join(", ")}.`);
+  }
+
+  const preview = cleanLine(firstPageText).split(" ").slice(0, 14).join(" ");
+  if (preview) points.push(`Apercu de la premiere page: ${preview}${preview.endsWith(".") ? "" : "..."} `);
+
+  const defaults = [
+    "Contenu pratique avec des idees applicables rapidement.",
+    "Lecture utile pour apprendre, reviser et passer a l'action.",
+    "Presentation claire pour garder l'essentiel sans perdre de temps.",
+  ];
+  for (const fallback of defaults) {
+    if (points.length >= 3) break;
+    points.push(fallback);
+  }
+
+  const idea = firstSentence
+    ? firstSentence.replace(/[.!?]+$/, "")
+    : `${safeTitle} propose une idee directrice claire a mettre en pratique.`;
+
+  return [
+    `[${safeTitle}]`,
+    `Catégorie : ${safeCat}`,
+    `Par ${safeAuthor}`,
+    hook,
+    `- ${points[0]}`,
+    `- ${points[1]}`,
+    `- ${points[2]}`,
+    `Idée clé : ${idea}`,
+  ].join("\n");
+}
+async function analyzeBookPDF(b64, fileName = "") {
+  try {
+    const firstPageText = await extractPDFFirstPageText(b64);
+    const hints = parsePdfCoverHints(firstPageText, fileName);
+    const online = await searchBookMetadata(hints.title, hints.author);
+
+    const title = cleanLine(
+      online?.title ||
+      hints.title ||
+      String(fileName || "").replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ")
+    );
+    const author = cleanLine(online?.author || hints.author || "");
+    const cat = detectBookCategory({
+      title,
+      author,
+      categories: online?.categories || [],
+      description: online?.description || "",
+      firstPageText,
+    });
+
+    return {
+      title,
+      author,
+      cat,
+      pageCount: online?.pageCount || null,
+      desc: buildBookDescription({
+        title,
+        author,
+        cat,
+        firstPageText,
+        onlineDescription: online?.description || "",
+        onlineCategories: online?.categories || [],
+        pageCount: online?.pageCount || null,
+      }),
+    };
   } catch { return {}; }
 }
 async function aiCat(title,author) {
   try {
-    const r=await fetch("https://api.anthropic.com/v1/messages",{
-      method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:60,messages:[{role:"user",content:`Catégorie parmi: ${CATS.join(", ")}.\nLivre: "${title}" par ${author}.\nRéponds avec le nom exact UNIQUEMENT.`}]})
+    const online = await searchBookMetadata(title, author);
+    return detectBookCategory({
+      title,
+      author,
+      categories: online?.categories || [],
+      description: online?.description || "",
+      firstPageText: "",
     });
-    const d=await r.json(); const t=d?.content?.[0]?.text?.trim()||"";
-    return CATS.find(c=>t.toLowerCase().includes(c.toLowerCase()))||"Autre";
   } catch { return "Autre"; }
 }
 async function sendTelegramNotif(order) {
@@ -683,14 +981,15 @@ export default function App() {
     const b64=await readFileAsBase64(file);
     setUploadedFile({name:file.name,size:(file.size/1024).toFixed(0)+" Ko",b64,type:file.type});
     if (file.type==="application/pdf") {
-      setAiLoading(true); toast$("🤖 IA analyse le PDF…");
-      const [cover,pages,analysis]=await Promise.all([extractPDFCover(b64),extractPDFPageCount(b64),analyzeBookPDF(b64)]);
+      setAiLoading(true); toast$("Analyse PDF + internet en cours...");
+      const [cover,pages,analysis]=await Promise.all([extractPDFCover(b64),extractPDFPageCount(b64),analyzeBookPDF(b64,file.name)]);
+      const finalPages = pages || analysis?.pageCount || null;
       if (cover) setExtractedCover(cover);
-      if (pages) setPageCount(pages);
-      if (analysis.title||analysis.author||analysis.desc) {
+      if (finalPages) setPageCount(finalPages);
+      if (analysis.title||analysis.author||analysis.desc||analysis.cat) {
         setForm(p=>({...p,title:analysis.title||p.title,author:analysis.author||p.author,cat:CATS.includes(analysis.cat)?analysis.cat:(p.cat||"Autre"),desc:analysis.desc||p.desc}));
       }
-      setAiLoading(false); toast$(`✅ IA terminée${pages ? ` — ${pages} pages` : ""}`);
+      setAiLoading(false); toast$(`Analyse terminee${finalPages ? ` - ${finalPages} pages` : ""}`);
     }
   };
 // ─── Sauvegarde livre ─────────────────────────────────────────────────────
