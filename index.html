@@ -5,9 +5,45 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Librairie YO — Livres numériques</title>
     <meta name="description" content="Librairie numérique à Conakry. Achetez et téléchargez vos livres immédiatement via Orange Money." />
+    <meta name="theme-color" content="#0f0d0b" />
+
+    <!-- Preconnect critique — établi la connexion AVANT que JS demande les ressources -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- DNS prefetch Firebase — résolution DNS en avance -->
+    <link rel="dns-prefetch" href="https://librairie-yo-default-rtdb.firebaseio.com" />
+
+    <!-- Fonts : chargement non-bloquant (media="print" → swap) -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,800;1,400&family=DM+Sans:wght@300;400;500;600&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,800;1,400&family=DM+Sans:wght@300;400;500;600&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
+
+    <!-- Critical CSS inline : évite FOUC (flash de contenu sans style)
+         Seul le strict minimum above-the-fold — le reste est dans App.css -->
+    <style>
+      *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+      :root{--bg:#0f0d0b;--bd:#2e2925;--s1:#1a1714;--cream:#f5ead8;--muted:#8a7f74}
+      body{background:var(--bg);color:var(--cream);font-family:'DM Sans',system-ui,sans-serif;min-height:100vh}
+      #root{min-height:100vh}
+      /* Nav placeholder visible AVANT que React monte (évite le saut de layout) */
+      #root:empty::before{
+        content:'';display:block;height:60px;
+        background:rgba(15,13,11,.97);border-bottom:1px solid var(--bd)
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+    <!-- type="module" = defer automatique → non-bloquant -->
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
