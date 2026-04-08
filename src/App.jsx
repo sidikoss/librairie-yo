@@ -544,7 +544,7 @@ export default function App() {
       if (analysis.title||analysis.author||analysis.desc) {
         setForm(p=>({...p,title:analysis.title||p.title,author:analysis.author||p.author,cat:CATS.includes(analysis.cat)?analysis.cat:(p.cat||"Autre"),desc:analysis.desc||p.desc}));
       }
-      setAiLoading(false); toast$(`✅ IA terminée${pages?` — ${pages} pages`:""`);
+      setAiLoading(false); toast$(`✅ IA terminée${pages ? ` — ${pages} pages` : ""}`);
     }
   };
 // ─── Sauvegarde livre ─────────────────────────────────────────────────────
@@ -609,30 +609,6 @@ const saveBook = async () => {
     toast$("Erreur : " + err.message, "er");
   }
 };
-    // Upload du fichier si nécessaire
-    if (uploadedFile) {
-      await api.put(`book-files/${bookKey}`, {
-        fileData: uploadedFile.b64,
-        fileName: uploadedFile.name,
-        fileType: uploadedFile.type
-      });
-    }
-
-    // Rafraîchir la liste des livres
-    const data = await api.get("books");
-    if (data) {
-      const fresh = Object.entries(data).map(([k,v]) => ({ ...v, fbKey: k }));
-      setBooks(fresh);
-      saveBooksCache(fresh);
-    }
-    setModal(null);
-
-  } catch(err) {
-    console.error(err);
-    toast$("Erreur : " + err.message, "er");
-  }
-};
-
 const confirmDel = async () => {
   try {
     await api.del(`books/${editB.fbKey}`);
