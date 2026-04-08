@@ -562,21 +562,21 @@ export default function App() {
     : Number(form.num || 0).toLocaleString("fr-FR") + " GNF";
 
   // Préparation de bookData
-  const bookData = {
-    title: sanitize(form.title),
-    author: sanitize(form.author),
-    cat: form.cat || "Autre",
-    emoji: form.emoji || "📚",
-    price: computedPrice,
-    num: Number(form.num) || 0,
-    desc: sanitize(form.desc || ""),
-    stock: Number(form.stock) || 99,
-    hasFile: uploadedFile ? true : (editB?.hasFile || false),
-    coverImage: extractedCover || editB?.coverImage || null,
-    pageCount: pageCount || editB?.pageCount || null,
-    featured: editB?.featured || false,
-    createdAt: modal === "add" ? Date.now() : (editB?.createdAt || Date.now())
-  };
+ const bookData = {
+  title: sanitize(form.title),
+  author: sanitize(form.author),
+  cat: form.cat || "Autre",
+  emoji: form.emoji || "📚",
+  price: computedPrice,
+  num: Number(form.num) || 0,
+  desc: sanitize(form.desc || ""),
+  stock: Number(form.stock) || 99,
+  hasFile: uploadedFile ? true : (editB?.hasFile || false),
+  coverImage: extractedCover || editB?.coverImage || null,
+  pageCount: pageCount || editB?.pageCount || null,
+  featured: editB?.featured || false,
+  createdAt: modal === "add" ? Date.now() : (editB?.createdAt || Date.now())
+};
 
   try {
     let bookKey;
