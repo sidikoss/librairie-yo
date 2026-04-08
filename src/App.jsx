@@ -557,7 +557,7 @@ export default function App() {
     if (Object.keys(errs).length) { setFormFieldErrs(errs); return; }
     const bookData = {
       title:sanitize(form.title),author:sanitize(form.author),cat:form.cat,emoji:form.emoji,
-      price:form.price||`${Number(form.num).toLocaleString("fr-FR")} GNF`,
+      price: form.price || (Number(form.num).toLocaleString("fr-FR") + " GNF"),
       num:Number(form.num),desc:sanitize(form.desc),stock:Number(form.stock)||99,
       hasFile:uploadedFile?true:(editB?.hasFile||false),
       coverImage:extractedCover||editB?.coverImage||null,
