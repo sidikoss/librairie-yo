@@ -1,4 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback, lazy, Suspense, memo } from "react";
+import "./App.css";
+
+// AdminPanel chargé uniquement quand l'admin se connecte
+// → pas dans le bundle initial des visiteurs
+const AdminPanel = lazy(() => import("./AdminPanel"));
 
 // ─────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -8,14 +13,11 @@ const OM_NUMBER          = "224613908784";
 const WA_NUMBER          = "224661862044";
 const TELEGRAM_BOT_TOKEN = "VOTRE_BOT_TOKEN";
 const TELEGRAM_CHAT_ID   = "VOTRE_CHAT_ID";
-
-// ─────────────────────────────────────────────────────────────
-// REST API — ZÉRO Firebase SDK pour les clients
-// Toutes les opérations passent par l'API REST Firebase HTTP
-// Bundle initial : ~180Ko au lieu de ~480Ko → x2.5 plus rapide
-// ─────────────────────────────────────────────────────────────
 const DB = "https://librairie-yo-default-rtdb.firebaseio.com";
 
+// ─────────────────────────────────────────────────────────────
+// REST API — zéro Firebase SDK (bundle x2.5 plus léger)
+// ─────────────────────────────────────────────────────────────
 const api = {
   get: async (path, ms = 8000) => {
     const ctrl = new AbortController();
@@ -32,7 +34,7 @@ const api = {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data)
     });
-    return r.json(); // { name: "-newKey" }
+    return r.json();
   },
   patch: async (path, data) => {
     const r = await fetch(`${DB}/${path}.json`, {
@@ -62,14 +64,13 @@ const loadCachedBooks = () => {
 };
 const saveBooksCache = books => {
   try {
-    // On exclut fileData (PDF base64 lourd) mais on garde coverImage
     const slim = books.map(({ fileData, ...rest }) => rest);
     localStorage.setItem(BOOKS_CACHE_KEY, JSON.stringify(slim));
   } catch {}
 };
 
 // ─────────────────────────────────────────────────────────────
-// SÉCURITÉ — Session admin + Rate limiter + Wishlist
+// SESSION / RATE LIMIT / WISHLIST
 // ─────────────────────────────────────────────────────────────
 const SESSION_KEY = "yo_adm_sess";
 const SESSION_TTL = 7_200_000;
@@ -92,7 +93,7 @@ const loadWish = () => { try { return JSON.parse(localStorage.getItem(WISH_KEY)|
 const saveWish = w => { try { localStorage.setItem(WISH_KEY, JSON.stringify(w)); } catch {} };
 
 // ─────────────────────────────────────────────────────────────
-// CATÉGORIES
+// CATÉGORIES & CONFIG
 // ─────────────────────────────────────────────────────────────
 const CATS = [
   "Roman","Science","Histoire","Philosophie","Manga",
@@ -124,7 +125,7 @@ const SORT_OPTS = [
 const EMOJIS = ["📚","📖","✨","🌙","💡","🔥","⭐","🌿","🦋","🎯","💰","🌹","🗺️","⚔️","🔮","🧠","🏆","⚡","🌍","🕌"];
 
 // ─────────────────────────────────────────────────────────────
-// HELPERS
+// HELPERS (stables — définis hors composant, pas recréés)
 // ─────────────────────────────────────────────────────────────
 const isNew7d    = ts  => ts && (Date.now()-ts) < 7*86_400_000;
 const fmtGNF     = n   => (n||0).toLocaleString("fr-FR")+" GNF";
@@ -143,18 +144,8 @@ function applySort(books, sort) {
   return b;
 }
 
-function exportCSV(orders) {
-  const H = ["Nom","Téléphone","Livres","Total GNF","Transaction OM","Statut","Date","Code promo","Réduction"];
-  const R = orders.map(o=>[o.name,o.phone,(o.items||[]).map(i=>`${i.title} x${i.qty}`).join(" | "),o.total,o.txId,o.status,fmtDate(o.createdAt),o.promoCode||"",o.discount||""]);
-  const csv = [H,...R].map(r=>r.map(c=>`"${String(c||"").replace(/"/g,'""')}"`).join(",")).join("\n");
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8;"}));
-  a.download = `commandes-yo-${new Date().toISOString().split("T")[0]}.csv`;
-  a.click();
-}
-
 // ─────────────────────────────────────────────────────────────
-// PDF.JS (chargé à la demande — admin uniquement)
+// PDF.JS — chargé à la demande (admin uniquement)
 // ─────────────────────────────────────────────────────────────
 function readFileAsBase64(file) {
   return new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=rej; fr.readAsDataURL(file); });
@@ -227,250 +218,6 @@ async function sendTelegramNotif(order) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// CSS — identique, fonts retirées (dans index.html)
-// ─────────────────────────────────────────────────────────────
-const CSS = `
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --bg:#0f0d0b;--s1:#1a1714;--s2:#231f1b;--bd:#2e2925;
-  --gold:#c9963a;--gl:#e8b85a;--cream:#f5ead8;--text:#e8ddd0;
-  --muted:#8a7f74;--red:#c0392b;--om:#ff6600;--green:#27ae60;--orange:#e67e22;
-  --blue:#2980b9;--purple:#8e44ad;
-}
-body{background:var(--bg);color:var(--text);font-family:'DM Sans',system-ui,sans-serif;min-height:100vh}
-
-.nav{position:sticky;top:0;z-index:100;height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 1.5rem;background:rgba(15,13,11,.97);backdrop-filter:blur(12px);border-bottom:1px solid var(--bd)}
-.logo{font-family:'Playfair Display',Georgia,serif;font-size:1.35rem;font-weight:800;color:var(--cream);cursor:pointer;user-select:none}
-.logo em{color:var(--gold);font-style:normal}
-.nav-right{display:flex;gap:.4rem;align-items:center;flex-wrap:wrap}
-.btn{display:inline-flex;align-items:center;gap:.35rem;padding:.42rem 1rem;border-radius:7px;border:none;font-family:'DM Sans',system-ui,sans-serif;font-size:.82rem;font-weight:500;cursor:pointer;transition:all .18s;white-space:nowrap;text-decoration:none}
-.btn-gold{background:var(--gold);color:#0f0d0b;font-weight:700}.btn-gold:hover{background:var(--gl)}
-.btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--bd)}.btn-ghost:hover{color:var(--text);border-color:var(--muted)}
-.btn-red{background:var(--red);color:#fff}.btn-red:hover{background:#a93226}
-.btn-om{background:var(--om);color:#fff;font-weight:700}.btn-om:hover{background:#e85c00}
-.btn-green{background:var(--green);color:#fff;font-weight:700}.btn-green:hover{background:#219a52}
-.btn-outline{background:transparent;color:var(--gold);border:1px solid var(--gold)}.btn-outline:hover{background:var(--gold);color:#0f0d0b}
-.btn-blue{background:var(--blue);color:#fff}.btn-blue:hover{background:#1f6498}
-.btn:disabled{opacity:.45;cursor:not-allowed}
-.btn-sm{padding:.28rem .65rem;font-size:.75rem}
-.cart-btn{position:relative;background:var(--s2);color:var(--text);border:1px solid var(--bd);padding:.4rem .9rem;border-radius:7px;cursor:pointer;font-size:.85rem;display:flex;align-items:center;gap:.4rem;transition:all .18s}
-.cart-btn:hover{border-color:var(--gold);color:var(--gold)}
-.badge{background:var(--gold);color:#0f0d0b;border-radius:50%;width:17px;height:17px;font-size:.65rem;font-weight:700;display:flex;align-items:center;justify-content:center}
-.admin-bar{background:rgba(201,150,58,.08);border-bottom:1px solid rgba(201,150,58,.25);padding:.5rem 1.5rem;display:flex;align-items:center;justify-content:space-between;font-size:.78rem;color:var(--gold);flex-wrap:wrap;gap:.5rem}
-
-.hero{text-align:center;padding:3.5rem 1.5rem 2rem;background:radial-gradient(ellipse at 50% 0%,rgba(201,150,58,.08) 0%,transparent 65%);border-bottom:1px solid var(--bd)}
-.hero-tag{font-size:.7rem;letter-spacing:.3em;text-transform:uppercase;color:var(--gold);margin-bottom:.9rem}
-.hero h1{font-family:'Playfair Display',Georgia,serif;font-size:clamp(2rem,5.5vw,3.8rem);font-weight:800;color:var(--cream);line-height:1.1;margin-bottom:.8rem}
-.hero h1 i{color:var(--gold);font-style:italic}
-.hero p{color:var(--muted);font-size:.92rem;max-width:420px;margin:0 auto 1.6rem}
-.search-box{max-width:400px;margin:0 auto .9rem;position:relative}
-.search-box input{width:100%;background:var(--s2);border:1px solid var(--bd);color:var(--text);padding:.7rem 1rem .7rem 2.5rem;border-radius:8px;font-family:'DM Sans',system-ui,sans-serif;font-size:.88rem;outline:none;transition:border-color .2s}
-.search-box input:focus{border-color:var(--gold)}.search-box input::placeholder{color:var(--muted)}
-.si{position:absolute;left:.8rem;top:50%;transform:translateY(-50%);color:var(--muted)}
-
-.cat-pills{display:flex;gap:.4rem;overflow-x:auto;padding:.1rem .1rem .5rem;scrollbar-width:none;max-width:760px;margin:0 auto}
-.cat-pills::-webkit-scrollbar{display:none}
-.pill{background:var(--s2);border:1px solid var(--bd);color:var(--muted);padding:.25rem .7rem;border-radius:20px;font-size:.72rem;cursor:pointer;white-space:nowrap;transition:all .18s}
-.pill:hover,.pill.active{background:rgba(201,150,58,.12);border-color:var(--gold);color:var(--gold)}
-.sort-bar{display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin-bottom:1.2rem}
-.sort-lbl{font-size:.72rem;color:var(--muted);margin-right:.2rem}
-.sort-btn{background:var(--s2);border:1px solid var(--bd);color:var(--muted);padding:.22rem .6rem;border-radius:6px;font-size:.7rem;cursor:pointer;transition:all .18s;font-family:'DM Sans',system-ui,sans-serif;white-space:nowrap}
-.sort-btn.active{background:rgba(201,150,58,.12);border-color:var(--gold);color:var(--gold)}
-
-.page{padding:2rem 1.5rem;max-width:1100px;margin:0 auto}
-.grid-title{font-family:'Playfair Display',Georgia,serif;font-size:1.35rem;color:var(--cream);margin-bottom:.2rem}
-.grid-sub{color:var(--muted);font-size:.78rem;margin-bottom:1rem}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:1.2rem}
-
-/* ── SKELETONS ── */
-@keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
-.skeleton{background:linear-gradient(90deg,var(--s2) 25%,var(--bd) 50%,var(--s2) 75%);background-size:800px 100%;animation:shimmer 1.4s infinite linear;border-radius:6px}
-.skeleton-card{background:var(--s1);border:1px solid var(--bd);border-radius:10px;overflow:hidden}
-.skeleton-cover{aspect-ratio:3/4;width:100%}
-.skeleton-body{padding:.8rem;display:flex;flex-direction:column;gap:.5rem}
-.skeleton-line{height:12px}
-.skeleton-line.short{width:60%}
-.skeleton-line.medium{width:80%}
-
-/* ── SYNC DOT ── */
-.sync-dot{width:6px;height:6px;border-radius:50%;background:var(--gold);display:inline-block;animation:pulse-dot 1s ease-in-out infinite;margin-left:.4rem;vertical-align:middle}
-@keyframes pulse-dot{0%,100%{opacity:.3}50%{opacity:1}}
-
-/* ── POLL LIVE BADGE ── */
-.live-badge{display:inline-flex;align-items:center;gap:.3rem;font-size:.65rem;color:var(--green);background:rgba(39,174,96,.1);border:1px solid rgba(39,174,96,.25);border-radius:20px;padding:.15rem .5rem;margin-left:.5rem}
-.live-dot{width:5px;height:5px;border-radius:50%;background:var(--green);animation:pulse-dot .8s ease-in-out infinite}
-
-.featured-section{padding:1.5rem 1.5rem 0;max-width:1100px;margin:0 auto}
-.featured-title{font-family:'Playfair Display',Georgia,serif;font-size:1.1rem;color:var(--cream);margin-bottom:1rem;display:flex;align-items:center;gap:.5rem}
-.featured-scroll{display:flex;gap:1rem;overflow-x:auto;padding:.2rem .1rem 1rem;scrollbar-width:thin;scrollbar-color:var(--bd) transparent}
-.featured-scroll::-webkit-scrollbar{height:4px}
-.featured-scroll::-webkit-scrollbar-track{background:transparent}
-.featured-scroll::-webkit-scrollbar-thumb{background:var(--bd);border-radius:2px}
-.featured-card{flex-shrink:0;width:155px}
-
-.card{background:var(--s1);border:1px solid var(--bd);border-radius:10px;overflow:hidden;transition:transform .2s,box-shadow .2s;cursor:pointer}
-.card:hover{transform:translateY(-3px);box-shadow:0 10px 32px rgba(0,0,0,.5)}
-.card-cover{width:100%;aspect-ratio:3/4;background:linear-gradient(135deg,var(--s2),#2a2420);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.4rem;position:relative;overflow:hidden}
-.card-cover-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:top}
-.card-cover-overlay{position:absolute;inset:0;background:linear-gradient(to bottom,transparent 50%,rgba(0,0,0,.65) 100%)}
-.emo{font-size:2.3rem;position:relative;z-index:1}
-.init{font-family:'Playfair Display',Georgia,serif;font-size:1.6rem;font-weight:800;color:var(--gold);opacity:.55;position:relative;z-index:1}
-.has-file-badge{position:absolute;bottom:.5rem;left:.5rem;background:var(--green);color:#fff;font-size:.58rem;font-weight:700;padding:.15rem .4rem;border-radius:4px;z-index:2;letter-spacing:.03em}
-.new-badge{position:absolute;top:.5rem;left:.5rem;background:var(--om);color:#fff;font-size:.6rem;font-weight:700;padding:.15rem .45rem;border-radius:4px;z-index:2;text-transform:uppercase;letter-spacing:.04em}
-.featured-badge{position:absolute;top:.5rem;left:.5rem;background:var(--gold);color:#0f0d0b;font-size:.6rem;font-weight:700;padding:.15rem .45rem;border-radius:4px;z-index:2;text-transform:uppercase}
-.wish-btn{position:absolute;top:.45rem;right:.45rem;background:rgba(0,0,0,.55);border:none;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:.82rem;z-index:3;transition:transform .18s;backdrop-filter:blur(4px)}
-.wish-btn:hover{transform:scale(1.2)}
-.card-body{padding:.8rem}
-.cat-tag{font-size:.6rem;text-transform:uppercase;letter-spacing:.12em;color:var(--gold);margin-bottom:.22rem}
-.title{font-family:'Playfair Display',Georgia,serif;font-size:.93rem;font-weight:700;color:var(--cream);line-height:1.25;margin-bottom:.18rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.author{font-size:.73rem;color:var(--muted);margin-bottom:.4rem}
-.pages-info{font-size:.65rem;color:var(--muted);margin-bottom:.5rem;display:flex;align-items:center;gap:.25rem}
-.pages-info span{color:rgba(201,150,58,.75)}
-.card-foot{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.4rem}
-.price{font-weight:700;color:var(--gold);font-size:.98rem}
-.stock-lbl{font-size:.63rem;color:var(--muted)}
-.add-btn{background:var(--gold);color:#0f0d0b;border:none;border-radius:5px;padding:.3rem .65rem;font-size:.72rem;font-weight:700;cursor:pointer;transition:background .18s}
-.add-btn:hover{background:var(--gl)}
-
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(5px);z-index:200;display:flex;align-items:center;justify-content:center;padding:1rem}
-.modal{background:var(--s1);border:1px solid var(--bd);border-radius:14px;padding:1.8rem;max-width:520px;width:100%;max-height:92vh;overflow-y:auto}
-.modal h2{font-family:'Playfair Display',Georgia,serif;font-size:1.3rem;color:var(--cream);margin-bottom:1.2rem}
-.mc{float:right;background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.2rem;transition:color .18s}
-.mc:hover{color:var(--text)}
-.fg{margin-bottom:.9rem}
-.fl{display:block;font-size:.7rem;color:var(--muted);margin-bottom:.28rem;text-transform:uppercase;letter-spacing:.06em}
-.fi,.fs,.ft{width:100%;background:var(--s2);border:1px solid var(--bd);color:var(--text);padding:.58rem .82rem;border-radius:7px;font-family:'DM Sans',system-ui,sans-serif;font-size:.86rem;outline:none;transition:border-color .2s}
-.fi:focus,.fs:focus,.ft:focus{border-color:var(--gold)}
-.fi.err-field{border-color:var(--red)}
-.ft{resize:vertical;min-height:72px}.fs option{background:var(--s2)}
-.fr{display:grid;grid-template-columns:1fr 1fr;gap:.7rem}
-.fa{display:flex;gap:.6rem;justify-content:flex-end;margin-top:1.3rem}
-.err{color:#f08080;font-size:.76rem;margin-top:.32rem}
-.field-err{color:#f08080;font-size:.72rem;margin-top:.2rem}
-.upload-zone{border:2px dashed var(--bd);border-radius:8px;padding:1.2rem;text-align:center;cursor:pointer;transition:border-color .2s;position:relative}
-.upload-zone:hover{border-color:var(--gold)}
-.upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer}
-.upload-zone .uico{font-size:1.8rem;margin-bottom:.4rem}
-.upload-zone p{font-size:.78rem;color:var(--muted)}
-.upload-zone strong{color:var(--gold)}
-.file-ready{background:rgba(39,174,96,.1);border:1px solid rgba(39,174,96,.35);border-radius:7px;padding:.6rem .9rem;display:flex;align-items:center;gap:.6rem;font-size:.8rem;margin-top:.5rem}
-.fname{flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.fsize{color:var(--muted);font-size:.7rem}
-.file-remove{background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem}
-.file-remove:hover{color:var(--red)}
-.cover-preview{width:100%;max-height:200px;object-fit:contain;object-position:top;border-radius:6px;margin-top:.5rem;border:1px solid var(--bd)}
-.ai-row{display:flex;align-items:center;gap:.5rem;font-size:.76rem;color:var(--gold);margin:.3rem 0 .6rem;background:rgba(201,150,58,.07);padding:.4rem .7rem;border-radius:6px}
-.ai-analysis-box{background:rgba(201,150,58,.05);border:1px solid rgba(201,150,58,.18);border-radius:8px;padding:.8rem 1rem;margin-bottom:.9rem;font-size:.78rem;color:var(--muted)}
-.promo-row{display:flex;gap:.5rem;align-items:stretch;margin-bottom:.7rem}
-.promo-row .fi{margin:0}
-.promo-applied{background:rgba(39,174,96,.08);border:1px solid rgba(39,174,96,.3);border-radius:7px;padding:.45rem .85rem;font-size:.8rem;color:var(--green);display:flex;align-items:center;justify-content:space-between;margin-bottom:.8rem}
-
-.cart-side{position:fixed;right:0;top:0;bottom:0;width:min(380px,100vw);background:var(--s1);border-left:1px solid var(--bd);z-index:300;padding:1.4rem;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s ease}
-.cart-side.open{transform:translateX(0)}
-.co{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:299}
-.ch{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.3rem}
-.ct{font-family:'Playfair Display',Georgia,serif;font-size:1.2rem;color:var(--cream)}
-.ci-list{flex:1;overflow-y:auto}
-.ci{display:flex;gap:.9rem;padding:.7rem 0;border-bottom:1px solid var(--bd)}
-.ci-info{flex:1}
-.ci-title{font-weight:500;color:var(--text);font-size:.85rem}
-.ci-price{color:var(--gold);font-size:.78rem}
-.qty{display:flex;align-items:center;gap:.4rem;margin-top:.25rem}
-.qb{background:var(--s2);border:1px solid var(--bd);color:var(--text);width:22px;height:22px;border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:.85rem}
-.qb:hover{border-color:var(--gold);color:var(--gold)}
-.rb{background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem;align-self:flex-start}
-.rb:hover{color:var(--red)}
-.cf{padding-top:.9rem;border-top:1px solid var(--bd)}
-.ctotal{display:flex;justify-content:space-between;margin-bottom:.9rem;font-weight:600;color:var(--cream)}
-.ctotal span:last-child{color:var(--gold);font-size:1.05rem}
-
-.om-box{background:linear-gradient(135deg,#ff6600,#ff8c00);border-radius:10px;padding:.9rem 1.1rem;margin-bottom:1rem;display:flex;align-items:center;gap:.8rem}
-.om-info{flex:1}
-.om-title{font-weight:700;color:#fff;font-size:.88rem;margin-bottom:.1rem}
-.om-num{font-family:'Playfair Display',Georgia,serif;font-size:1.1rem;font-weight:800;color:#fff;letter-spacing:.04em}
-.om-sub{font-size:.67rem;color:rgba(255,255,255,.8);margin-top:.1rem}
-.om-copy{background:rgba(255,255,255,.25);border:none;border-radius:6px;padding:.32rem .6rem;font-size:.7rem;color:#fff;cursor:pointer;font-weight:600}
-.om-copy:hover{background:rgba(255,255,255,.4)}
-.step{display:flex;gap:.65rem;align-items:flex-start;margin-bottom:.48rem;font-size:.78rem;color:var(--muted)}
-.sn{background:var(--om);color:#fff;border-radius:50%;width:19px;height:19px;font-size:.67rem;font-weight:700;flex-shrink:0;display:flex;align-items:center;justify-content:center;margin-top:.1rem}
-.step strong{color:var(--text)}
-
-.empty{text-align:center;padding:5rem 1rem;color:var(--muted)}
-@keyframes spin{to{transform:rotate(360deg)}}
-.spin{display:inline-block;animation:spin .9s linear infinite}
-.status-badge{display:inline-flex;align-items:center;gap:.3rem;padding:.18rem .55rem;border-radius:20px;font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
-.status-pending{background:rgba(230,126,34,.15);color:var(--orange);border:1px solid rgba(230,126,34,.3)}
-.status-approved{background:rgba(39,174,96,.15);color:var(--green);border:1px solid rgba(39,174,96,.3)}
-.status-rejected{background:rgba(192,57,43,.15);color:#f08080;border:1px solid rgba(192,57,43,.3)}
-
-.toast{position:fixed;bottom:1.8rem;left:50%;transform:translateX(-50%);background:var(--s2);border:1px solid var(--bd);color:var(--text);padding:.6rem 1.3rem;border-radius:8px;font-size:.82rem;z-index:600;animation:tin .25s ease;box-shadow:0 8px 28px rgba(0,0,0,.45);white-space:nowrap;pointer-events:none}
-.toast.ok{border-color:var(--green);color:#6fcf97}
-.toast.er{border-color:var(--red);color:#f08080}
-@keyframes tin{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
-
-.dl-spinner{display:inline-flex;align-items:center;gap:.4rem;font-size:.8rem;color:var(--gold);padding:.35rem .7rem;background:rgba(201,150,58,.08);border:1px solid rgba(201,150,58,.2);border-radius:6px}
-.pending-page{max-width:460px;margin:3rem auto;padding:0 1.5rem;text-align:center}
-.pending-page .big-icon{font-size:3.5rem;margin-bottom:.9rem}
-.pending-page h2{font-family:'Playfair Display',Georgia,serif;font-size:1.8rem;color:var(--cream);margin-bottom:.6rem}
-.pending-page p{color:var(--muted);font-size:.88rem;line-height:1.6;margin-bottom:1.3rem}
-.info-box{background:rgba(201,150,58,.06);border:1px solid rgba(201,150,58,.2);border-radius:8px;padding:.85rem 1rem;font-size:.8rem;color:var(--muted);text-align:left;line-height:1.8;margin-bottom:1.3rem}
-.info-box strong{color:var(--text)}
-.pin-highlight{background:var(--s2);border:2px solid var(--gold);border-radius:8px;padding:.6rem 1rem;font-size:1.1rem;font-weight:700;color:var(--gold);letter-spacing:.2em;text-align:center;margin:.5rem 0 1rem;font-family:monospace}
-.check-page{max-width:420px;margin:3rem auto;padding:0 1.5rem}
-.check-page h2{font-family:'Playfair Display',Georgia,serif;font-size:1.7rem;color:var(--cream);margin-bottom:.5rem;text-align:center}
-.dl-card{background:var(--s1);border:1px solid var(--bd);border-radius:12px;padding:1.3rem;margin-bottom:1.1rem}
-.dl-formats{display:flex;gap:.5rem;flex-wrap:wrap}
-.pin-input{letter-spacing:.3em;text-align:center;font-size:1.1rem;font-weight:700;font-family:monospace}
-.copy-sum{background:var(--s2);border:1px solid var(--bd);color:var(--muted);padding:.28rem .7rem;border-radius:6px;font-size:.72rem;cursor:pointer;transition:all .18s;font-family:'DM Sans',system-ui,sans-serif}
-.copy-sum:hover{border-color:var(--gold);color:var(--gold)}
-
-.admin-tabs{display:flex;gap:.5rem;border-bottom:1px solid var(--bd);margin-bottom:1.6rem;overflow-x:auto;scrollbar-width:none}
-.admin-tabs::-webkit-scrollbar{display:none}
-.tab{background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);padding:.52rem .88rem;cursor:pointer;font-family:'DM Sans',system-ui,sans-serif;font-size:.82rem;font-weight:500;transition:all .18s;margin-bottom:-1px;white-space:nowrap}
-.tab.active{color:var(--gold);border-bottom-color:var(--gold)}
-.tab:hover:not(.active){color:var(--text)}
-.order-row{background:var(--s1);border:1px solid var(--bd);border-radius:10px;padding:.95rem 1.1rem;margin-bottom:.85rem}
-.order-row-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:.55rem;flex-wrap:wrap}
-.order-meta{font-size:.77rem;color:var(--muted);line-height:1.6}
-.order-meta strong{color:var(--cream);font-size:.86rem}
-.order-items{font-size:.77rem;color:var(--muted);margin-bottom:.65rem;line-height:1.5}
-.order-tx{font-size:.73rem;background:var(--s2);border:1px solid var(--bd);border-radius:5px;padding:.22rem .55rem;color:var(--gold);font-family:monospace;display:inline-block;margin-top:.2rem}
-.order-actions{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.8rem}
-.search-input{width:100%;background:var(--s2);border:1px solid var(--bd);color:var(--text);padding:.58rem .82rem;border-radius:7px;font-family:'DM Sans',system-ui,sans-serif;font-size:.84rem;outline:none;margin-bottom:1.1rem;transition:border-color .2s}
-.search-input:focus{border-color:var(--gold)}
-.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:.9rem;margin-bottom:1.8rem}
-.stat-card{background:var(--s1);border:1px solid var(--bd);border-radius:10px;padding:1rem .9rem;text-align:center}
-.stat-icon{font-size:1.4rem;margin-bottom:.4rem}
-.stat-val{font-family:'Playfair Display',Georgia,serif;font-size:1.3rem;font-weight:700;color:var(--gold);margin-bottom:.2rem;line-height:1.1}
-.stat-lbl{font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
-.top-book-row{display:flex;align-items:center;gap:.8rem;padding:.6rem .9rem;background:var(--s1);border:1px solid var(--bd);border-radius:8px;margin-bottom:.6rem}
-.promo-code-row{background:var(--s1);border:1px solid var(--bd);border-radius:9px;padding:.8rem 1rem;margin-bottom:.7rem;display:flex;align-items:center;gap:.8rem;flex-wrap:wrap}
-.promo-code-label{font-family:monospace;font-size:1rem;font-weight:700;min-width:80px}
-.promo-form{background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:1.2rem;margin-bottom:1.5rem}
-.detail-cover{width:120px;flex-shrink:0;aspect-ratio:3/4;border-radius:8px;overflow:hidden;border:1px solid var(--bd);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:2.5rem}
-.detail-cover img{width:100%;height:100%;object-fit:cover;object-position:top}
-.detail-title{font-family:'Playfair Display',Georgia,serif;font-size:1.3rem;font-weight:800;color:var(--cream);line-height:1.2;margin-bottom:.4rem}
-.detail-author{color:var(--muted);font-size:.84rem;margin-bottom:.4rem}
-.detail-pages{font-size:.76rem;color:rgba(201,150,58,.75);margin-bottom:.5rem;display:flex;align-items:center;gap:.3rem}
-.detail-price{color:var(--gold);font-size:1.4rem;font-weight:700;margin-bottom:.9rem}
-.detail-desc{background:var(--s2);border-radius:8px;padding:.9rem 1rem;font-size:.84rem;color:var(--muted);line-height:1.75;margin-top:.9rem}
-.wa-fab{position:fixed;bottom:1.5rem;right:1.5rem;background:#25D366;border:none;border-radius:50%;width:52px;height:52px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,.45);z-index:150;font-size:1.5rem;transition:transform .2s,box-shadow .2s;text-decoration:none}
-.wa-fab:hover{transform:scale(1.1);box-shadow:0 6px 28px rgba(37,211,102,.4)}
-.wa-tooltip{position:absolute;right:calc(100% + .6rem);background:var(--s1);border:1px solid var(--bd);color:var(--text);padding:.3rem .7rem;border-radius:6px;font-size:.74rem;white-space:nowrap;opacity:0;transition:opacity .2s;pointer-events:none}
-.wa-fab:hover .wa-tooltip{opacity:1}
-hr.div{border:none;border-top:1px solid var(--bd);margin:1rem 0}
-@media(max-width:480px){
-  .nav{padding:0 .9rem;height:55px}
-  .nav-right{gap:.3rem}
-  .btn-sm{padding:.24rem .5rem;font-size:.72rem}
-  .hero{padding:2.5rem 1rem 1.5rem}
-  .page{padding:1.5rem 1rem}
-  .grid{grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:.9rem}
-  .fr{grid-template-columns:1fr}
-}
-`;
-
-// ─────────────────────────────────────────────────────────────
 // SKELETON CARD
 // ─────────────────────────────────────────────────────────────
 const SkeletonCard = () => (
@@ -485,11 +232,54 @@ const SkeletonCard = () => (
 );
 
 // ─────────────────────────────────────────────────────────────
+// BOOK CARD — mémoïsée : ne se re-render que si ses props changent
+// ─────────────────────────────────────────────────────────────
+const BookCard = memo(function BookCard({ b, admin, wished, onAddCart, onToggleWish, onOpenDetail, onEdit, onDelete, onToggleFeatured }) {
+  return (
+    <div className="card" onClick={()=>onOpenDetail(b)}>
+      <div className="card-cover">
+        {b.coverImage
+          ?<><img src={b.coverImage} alt={b.title} className="card-cover-img" loading="lazy"/><div className="card-cover-overlay"/></>
+          :<><span className="emo">{b.emoji||"📚"}</span><span className="init">{b.title?.[0]}</span></>}
+        {b.featured&&!isNew7d(b.createdAt)&&<span className="featured-badge">⭐ Coup de cœur</span>}
+        {isNew7d(b.createdAt)&&<span className="new-badge">🆕 Nouveau</span>}
+        {b.hasFile&&<span className="has-file-badge">PDF ✓</span>}
+        <button className="wish-btn" onClick={e=>{e.stopPropagation();onToggleWish(b.fbKey);}}>
+          {wished?"❤️":"🤍"}
+        </button>
+      </div>
+      <div className="card-body">
+        <div className="cat-tag">{CAT_ICONS[b.cat]||""} {b.cat}</div>
+        <div className="title">{b.title}</div>
+        <div className="author">{b.author}</div>
+        {b.pageCount&&<div className="pages-info"><span>📄</span><span>{b.pageCount} pages</span></div>}
+        <div className="card-foot">
+          <div>
+            <div className="price">{b.price}</div>
+            <div className="stock-lbl">{b.hasFile?"📥 Téléchargement immédiat":"⏳ Bientôt dispo"}</div>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:".3rem"}}>
+            <button className="add-btn" onClick={e=>{e.stopPropagation();onAddCart(b);}}>Acheter</button>
+            {admin&&(
+              <div style={{display:"flex",gap:".25rem"}}>
+                <button className="btn btn-ghost btn-sm" onClick={e=>{e.stopPropagation();onEdit(b);}}>✏️</button>
+                <button className="btn btn-ghost btn-sm" onClick={e=>{e.stopPropagation();onToggleFeatured(b);}}>{b.featured?"⭐":"☆"}</button>
+                <button className="btn btn-red btn-sm"   onClick={e=>{e.stopPropagation();onDelete(b);}}>🗑️</button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+// ─────────────────────────────────────────────────────────────
 // COMPOSANT PRINCIPAL
 // ─────────────────────────────────────────────────────────────
 export default function App() {
-  // ── State — livres ──
-  const [books,       setBooks]       = useState(loadCachedBooks); // Cache instantané
+  // ── State livres ──
+  const [books,       setBooks]       = useState(loadCachedBooks);
   const [loading,     setLoading]     = useState(() => loadCachedBooks().length === 0);
   const [syncing,     setSyncing]     = useState(true);
   const [adminOrders, setAdminOrders] = useState([]);
@@ -550,9 +340,7 @@ export default function App() {
   const emptyPromo = {code:"",discount:"",type:"percent",maxUses:"100"};
   const [promoForm, setPromoForm] = useState(emptyPromo);
 
-  // ─── CHARGEMENT LIVRES — cache-first + REST en arrière-plan ──────────────
-  // 1ère visite  : skeletons → REST fetch (8s timeout)
-  // 2ème+ visite : cache localStorage (0ms) → REST update silencieux
+  // ─── CHARGEMENT LIVRES ────────────────────────────────────────────────────
   useEffect(() => {
     const sync = async () => {
       const data = await api.get("books", 8000);
@@ -567,7 +355,7 @@ export default function App() {
     sync();
   }, []);
 
-  // ─── CODES PROMO — REST fetch au démarrage ────────────────────────────────
+  // ─── CODES PROMO ──────────────────────────────────────────────────────────
   useEffect(() => {
     const load = async () => {
       const data = await api.get("promoCodes");
@@ -577,7 +365,6 @@ export default function App() {
   }, []);
 
   // ─── ADMIN COMMANDES — polling REST toutes les 5s ────────────────────────
-  // Remplace onSnapshot Firebase (WebSocket) → plus fiable sur 2G/3G
   useEffect(() => {
     if (!isAdmin) return;
     const poll = async () => {
@@ -589,8 +376,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isAdmin]);
 
-  // ─── POLLING STATUT CLIENT — toutes les 30s si commande en attente ────────
-  // Quand admin approuve, client voit le changement en <30s automatiquement
+  // ─── POLLING STATUT CLIENT — toutes les 30s ──────────────────────────────
   useEffect(() => {
     if (view !== "check" || !myOrders || !myOrders.some(o => o.status === "pending")) return;
     const poll = async () => {
@@ -606,22 +392,20 @@ export default function App() {
     return () => clearInterval(interval);
   }, [view, myOrders, checkPhone, checkPin]);
 
-  // ─── Keyboard & scroll ────────────────────────────────────────────────────
+  // ─── Keyboard ─────────────────────────────────────────────────────────────
   useEffect(() => {
     const h = e => { if (e.key==="Escape") { setModal(null); setCartOpen(false); } };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
   }, []);
+
   useEffect(() => { window.scrollTo({top:0,behavior:"smooth"}); }, [view]);
 
-  // ── helpers ──
-  const toast$ = (msg, type="ok") => { setToast({msg,type}); setTimeout(()=>setToast(null), 3500); };
-  const toggleWish = fbKey => {
-    setWishlist(prev => { const n=prev.includes(fbKey)?prev.filter(k=>k!==fbKey):[...prev,fbKey]; saveWish(n); return n; });
-  };
-
-  // ─── Catalogue filtré + trié ──────────────────────────────────────────────
-  const filtered = (() => {
+  // ─────────────────────────────────────────────────────────────
+  // VALEURS MÉMOÏSÉES — recalculées seulement quand leurs
+  // dépendances changent (pas à chaque frappe au clavier)
+  // ─────────────────────────────────────────────────────────────
+  const filtered = useMemo(() => {
     const q = search.toLowerCase();
     let res = books.filter(b => {
       const matchQ = !q || b.title?.toLowerCase().includes(q) || b.author?.toLowerCase().includes(q) || b.cat?.toLowerCase().includes(q);
@@ -633,26 +417,96 @@ export default function App() {
       return matchQ && matchCat;
     });
     return applySort(res, sort);
-  })();
+  }, [books, search, activeCat, sort, wishlist]);
 
-  const featuredBooks = books.filter(b => b.featured);
-  const cartCount = cart.reduce((s,i)=>s+i.qty, 0);
-  const cartTotal = cart.reduce((s,i)=>s+i.num*i.qty, 0);
-  const discountedTotal = (() => {
+  const featuredBooks = useMemo(() => books.filter(b => b.featured), [books]);
+
+  const cartTotal = useMemo(
+    () => cart.reduce((s,i)=>s+i.num*i.qty, 0),
+    [cart]
+  );
+  const discountedTotal = useMemo(() => {
     if (!appliedPromo) return cartTotal;
     if (appliedPromo.type==="percent") return Math.round(cartTotal*(1-appliedPromo.discount/100));
     return Math.max(0, cartTotal-appliedPromo.discount);
-  })();
-  const pendingCount = adminOrders.filter(o=>o.status==="pending").length;
+  }, [cartTotal, appliedPromo]);
 
-  // ─── Panier ───────────────────────────────────────────────────────────────
-  const addCart = b => {
+  const cartCount = useMemo(() => cart.reduce((s,i)=>s+i.qty, 0), [cart]);
+
+  const pendingCount = useMemo(
+    () => adminOrders.filter(o=>o.status==="pending").length,
+    [adminOrders]
+  );
+
+  const statsData = useMemo(() => {
+    const approved=adminOrders.filter(o=>o.status==="approved");
+    const pending=adminOrders.filter(o=>o.status==="pending");
+    const rejected=adminOrders.filter(o=>o.status==="rejected");
+    const totalRevenue=approved.reduce((s,o)=>s+(o.total||0),0);
+    const now=new Date(); const ms=new Date(now.getFullYear(),now.getMonth(),1).getTime();
+    const monthRevenue=approved.filter(o=>(o.createdAt||0)>=ms).reduce((s,o)=>s+(o.total||0),0);
+    const bookCounts={};
+    approved.forEach(o=>(o.items||[]).forEach(it=>{if(!bookCounts[it.title])bookCounts[it.title]={title:it.title,count:0};bookCounts[it.title].count+=it.qty;}));
+    const topBooks=Object.values(bookCounts).sort((a,b)=>b.count-a.count).slice(0,5);
+    return {approved:approved.length,pending:pending.length,rejected:rejected.length,totalRevenue,monthRevenue,topBooks};
+  }, [adminOrders]);
+
+  const filteredOrders = useMemo(() => {
+    const q=orderSearch.toLowerCase();
+    return adminOrders.filter(o=>!q||o.name?.toLowerCase().includes(q)||o.phone?.includes(q)||o.txId?.toLowerCase().includes(q));
+  }, [adminOrders, orderSearch]);
+
+  const filteredAdminBooks = useMemo(() => {
+    const q=adminSearch.toLowerCase();
+    return books.filter(b=>!q||b.title?.toLowerCase().includes(q)||b.author?.toLowerCase().includes(q));
+  }, [books, adminSearch]);
+
+  // ─────────────────────────────────────────────────────────────
+  // CALLBACKS STABLES — useCallback évite les re-renders des
+  // BookCard mémoïsées quand App se re-render
+  // ─────────────────────────────────────────────────────────────
+  const toast$ = useCallback((msg, type="ok") => {
+    setToast({msg,type});
+    setTimeout(()=>setToast(null), 3500);
+  }, []);
+
+  const toggleWish = useCallback(fbKey => {
+    setWishlist(prev => {
+      const n = prev.includes(fbKey) ? prev.filter(k=>k!==fbKey) : [...prev, fbKey];
+      saveWish(n);
+      return n;
+    });
+  }, []);
+
+  const addCart = useCallback(b => {
     setCart(p=>{const ex=p.find(i=>i.fbKey===b.fbKey); return ex?p.map(i=>i.fbKey===b.fbKey?{...i,qty:i.qty+1}:i):[...p,{...b,qty:1}];});
     toast$(`"${b.title}" ajouté ✓`);
-  };
+  }, [toast$]);
+
+  const openDetail = useCallback(b => { setDetailBook(b); setModal("detail"); }, []);
+
+  const openEdit = useCallback(b => {
+    setEditB(b);
+    setForm({title:b.title,author:b.author,cat:b.cat,price:b.price,num:b.num,desc:b.desc||"",stock:b.stock,emoji:b.emoji||"📚"});
+    setUploadedFile(null); setExtractedCover(b.coverImage||null); setPageCount(b.pageCount||null);
+    setFormErr(""); setFormFieldErrs({}); setModal("edit");
+  }, []);
+
+  const delBook = useCallback(b => { setEditB(b); setModal("del"); }, []);
+
+  const toggleFeatured = useCallback(async b => {
+    await api.patch(`books/${b.fbKey}`,{featured:!b.featured});
+    setBooks(prev=>prev.map(x=>x.fbKey===b.fbKey?{...x,featured:!x.featured}:x));
+    toast$(b.featured?"Retiré des mis en avant":"⭐ Mis en avant");
+  }, [toast$]);
+
+  const copyOM = useCallback(() => {
+    navigator.clipboard.writeText(OM_NUMBER).catch(()=>{});
+    toast$("Numéro copié 📋");
+  }, [toast$]);
+
   const updQ    = (k,d) => setCart(p=>p.map(i=>i.fbKey===k?{...i,qty:Math.max(1,i.qty+d)}:i));
   const remCart = k => setCart(p=>p.filter(i=>i.fbKey!==k));
-  const copyOM  = () => { navigator.clipboard.writeText(OM_NUMBER).catch(()=>{}); toast$("Numéro copié 📋"); };
 
   // ─── Admin login ──────────────────────────────────────────────────────────
   const doLogin = () => {
@@ -665,12 +519,6 @@ export default function App() {
 
   // ─── Formulaire livre ─────────────────────────────────────────────────────
   const openAdd = () => { setForm(emptyF); setUploadedFile(null); setExtractedCover(null); setPageCount(null); setFormErr(""); setFormFieldErrs({}); setModal("add"); };
-  const openEdit = b => {
-    setEditB(b);
-    setForm({title:b.title,author:b.author,cat:b.cat,price:b.price,num:b.num,desc:b.desc||"",stock:b.stock,emoji:b.emoji||"📚"});
-    setUploadedFile(null); setExtractedCover(b.coverImage||null); setPageCount(b.pageCount||null);
-    setFormErr(""); setFormFieldErrs({}); setModal("edit");
-  };
 
   const chForm = e => {
     const {name:n,value:v}=e.target;
@@ -700,14 +548,13 @@ export default function App() {
     }
   };
 
-  // ─── Sauvegarde livre (REST — admin) ──────────────────────────────────────
+  // ─── Sauvegarde livre ─────────────────────────────────────────────────────
   const saveBook = async () => {
     const errs={};
     if (!form.title.trim()) errs.title="Titre requis";
     if (!form.author.trim()) errs.author="Auteur requis";
     if (!form.num||isNaN(form.num)) errs.num="Prix requis";
     if (Object.keys(errs).length) { setFormFieldErrs(errs); return; }
-
     const bookData = {
       title:sanitize(form.title),author:sanitize(form.author),cat:form.cat,emoji:form.emoji,
       price:form.price||`${Number(form.num).toLocaleString("fr-FR")} GNF`,
@@ -718,44 +565,36 @@ export default function App() {
       featured:editB?.featured||false,
       createdAt:modal==="add"?Date.now():(editB?.createdAt||Date.now()),
     };
-
     try {
       let bookKey;
       if (modal==="add") {
         const res = await api.post("books", bookData);
-        bookKey = res.name; // clé Firebase auto-générée
+        bookKey = res.name;
         toast$(`"${form.title}" publié ✓`);
       } else {
         await api.patch(`books/${editB.fbKey}`, bookData);
         bookKey = editB.fbKey;
         toast$(`"${form.title}" mis à jour ✓`);
       }
-      // Fichier séparé dans /book-files/ → catalogue reste léger
       if (uploadedFile) {
         await api.put(`book-files/${bookKey}`, {fileData:uploadedFile.b64,fileName:uploadedFile.name,fileType:uploadedFile.type});
       }
-      // Refresh catalogue local
       const data = await api.get("books");
       if (data) { const fresh=Object.entries(data).map(([k,v])=>({...v,fbKey:k})); setBooks(fresh); saveBooksCache(fresh); }
       setModal(null);
     } catch(err) { toast$("Erreur : "+err.message,"er"); }
   };
 
-  const delBook    = b => { setEditB(b); setModal("del"); };
   const confirmDel = async () => {
     await api.del(`books/${editB.fbKey}`);
     try { await api.del(`book-files/${editB.fbKey}`); } catch {}
-    setBooks(prev=>prev.filter(b=>b.fbKey!==editB.fbKey));
-    saveBooksCache(books.filter(b=>b.fbKey!==editB.fbKey));
+    const next = books.filter(b=>b.fbKey!==editB.fbKey);
+    setBooks(next);
+    saveBooksCache(next);
     toast$("Livre supprimé","er"); setModal(null);
   };
-  const toggleFeatured = async b => {
-    await api.patch(`books/${b.fbKey}`,{featured:!b.featured});
-    setBooks(prev=>prev.map(x=>x.fbKey===b.fbKey?{...x,featured:!x.featured}:x));
-    toast$(b.featured?"Retiré des mis en avant":"⭐ Mis en avant");
-  };
 
-  // ─── Checkout (REST — zéro SDK) ───────────────────────────────────────────
+  // ─── Checkout ─────────────────────────────────────────────────────────────
   const applyPromo = () => {
     const code=promoCodes.find(p=>p.active&&p.code.toUpperCase()===promoInput.trim().toUpperCase());
     if (!code)                                         { toast$("Code promo invalide ou inactif","er"); return; }
@@ -774,8 +613,6 @@ export default function App() {
     if (!/^\d{4}$/.test(checkF.pin))   errs.pin="PIN à 4 chiffres requis";
     if (Object.keys(errs).length) { setCheckErrs(errs); return; }
     if (!canOrder()) { toast$("Trop de tentatives — réessayez dans 10 minutes","er"); return; }
-
-    // Vérification doublon txId
     try {
       const allOrders=await api.get("orders");
       if (allOrders) {
@@ -783,7 +620,6 @@ export default function App() {
         if (dup) { toast$("Ce numéro de transaction a déjà été utilisé","er"); return; }
       }
     } catch {}
-
     const orderData = {
       name:sanitize(checkF.name),phone:checkF.phone.trim().replace(/\s+/g,""),
       txId:checkF.txId.trim().toUpperCase(),pin:checkF.pin,
@@ -792,13 +628,10 @@ export default function App() {
       items:cart.map(i=>({fbKey:i.fbKey,title:i.title,author:i.author,emoji:i.emoji,qty:i.qty,price:i.num*i.qty})),
       status:"pending",createdAt:Date.now(),
     };
-
     try {
       const res = await api.post("orders", orderData);
       const fbKey = res.name;
-      if (appliedPromo) {
-        await api.patch(`promoCodes/${appliedPromo.fbKey}`,{uses:(appliedPromo.uses||0)+1});
-      }
+      if (appliedPromo) await api.patch(`promoCodes/${appliedPromo.fbKey}`,{uses:(appliedPromo.uses||0)+1});
       const saved={...orderData,fbKey};
       setPendingOrder(saved);
       sendTelegramNotif(saved).catch(()=>{});
@@ -809,7 +642,7 @@ export default function App() {
     } catch(err) { toast$("Erreur : "+err.message,"er"); }
   };
 
-  // ─── Mes commandes (REST — zéro SDK) ──────────────────────────────────────
+  // ─── Mes commandes ────────────────────────────────────────────────────────
   const checkMyOrders = async () => {
     const errs={};
     if (!checkPhone.trim())       errs.phone="Téléphone requis";
@@ -829,14 +662,12 @@ export default function App() {
     setCheckingOrders(false);
   };
 
-  // ─── Admin: statut commande (REST) ────────────────────────────────────────
+  // ─── Admin actions ────────────────────────────────────────────────────────
   const setOrderStatus = async (fbKey, status) => {
     await api.patch(`orders/${fbKey}`,{status,reviewedAt:Date.now()});
     setAdminOrders(prev=>prev.map(o=>o.fbKey===fbKey?{...o,status,reviewedAt:Date.now()}:o));
     toast$(status==="approved"?"✅ Commande approuvée":"❌ Commande rejetée",status==="approved"?"ok":"er");
   };
-
-  // ─── Admin: promo codes (REST) ────────────────────────────────────────────
   const addPromoCode = async () => {
     if (!promoForm.code.trim()||!promoForm.discount) { toast$("Code et réduction requis","er"); return; }
     if (promoCodes.find(p=>p.code.toUpperCase()===promoForm.code.trim().toUpperCase())) { toast$("Ce code existe déjà","er"); return; }
@@ -856,12 +687,12 @@ export default function App() {
     toast$("Code supprimé","er");
   };
 
-  // ─── Téléchargement (REST — récupéré à la demande uniquement) ─────────────
+  // ─── Téléchargement ───────────────────────────────────────────────────────
   const downloadBook = async book => {
     setDownloadingKey(book.fbKey);
     try {
       let snap=await api.get(`book-files/${book.fbKey}`);
-      if (!snap) snap=await api.get(`books/${book.fbKey}`); // fallback ancienne archi
+      if (!snap) snap=await api.get(`books/${book.fbKey}`);
       if (snap?.fileData) {
         const a=document.createElement("a"); a.href=snap.fileData; a.download=snap.fileName||book.title; a.click();
         toast$("Téléchargement lancé ✓");
@@ -886,71 +717,27 @@ export default function App() {
     navigator.clipboard.writeText(txt).catch(()=>{}); toast$("Résumé copié 📋");
   };
 
-  // ─── Stats admin ──────────────────────────────────────────────────────────
-  const statsData = (() => {
-    const approved=adminOrders.filter(o=>o.status==="approved");
-    const pending=adminOrders.filter(o=>o.status==="pending");
-    const rejected=adminOrders.filter(o=>o.status==="rejected");
-    const totalRevenue=approved.reduce((s,o)=>s+(o.total||0),0);
-    const now=new Date(); const ms=new Date(now.getFullYear(),now.getMonth(),1).getTime();
-    const monthRevenue=approved.filter(o=>(o.createdAt||0)>=ms).reduce((s,o)=>s+(o.total||0),0);
-    const bookCounts={};
-    approved.forEach(o=>(o.items||[]).forEach(it=>{if(!bookCounts[it.title])bookCounts[it.title]={title:it.title,count:0};bookCounts[it.title].count+=it.qty;}));
-    const topBooks=Object.values(bookCounts).sort((a,b)=>b.count-a.count).slice(0,5);
-    return {approved:approved.length,pending:pending.length,rejected:rejected.length,totalRevenue,monthRevenue,topBooks};
-  })();
-
-  const filteredOrders     = adminOrders.filter(o=>{const q=orderSearch.toLowerCase();return !q||o.name?.toLowerCase().includes(q)||o.phone?.includes(q)||o.txId?.toLowerCase().includes(q);});
-  const filteredAdminBooks = books.filter(b=>{const q=adminSearch.toLowerCase();return !q||b.title?.toLowerCase().includes(q)||b.author?.toLowerCase().includes(q);});
-
-  // ─────────────────────────────────────────────────────────────
-  // COMPOSANT CARTE LIVRE
-  // ─────────────────────────────────────────────────────────────
-  const BookCard = ({b, admin}) => (
-    <div className="card" onClick={()=>{setDetailBook(b);setModal("detail");}}>
-      <div className="card-cover">
-        {b.coverImage
-          ?<><img src={b.coverImage} alt={b.title} className="card-cover-img" loading="lazy"/><div className="card-cover-overlay"/></>
-          :<><span className="emo">{b.emoji||"📚"}</span><span className="init">{b.title?.[0]}</span></>}
-        {b.featured&&!isNew7d(b.createdAt)&&<span className="featured-badge">⭐ Coup de cœur</span>}
-        {isNew7d(b.createdAt)&&<span className="new-badge">🆕 Nouveau</span>}
-        {b.hasFile&&<span className="has-file-badge">PDF ✓</span>}
-        <button className="wish-btn" onClick={e=>{e.stopPropagation();toggleWish(b.fbKey);}}>
-          {wishlist.includes(b.fbKey)?"❤️":"🤍"}
-        </button>
-      </div>
-      <div className="card-body">
-        <div className="cat-tag">{CAT_ICONS[b.cat]||""} {b.cat}</div>
-        <div className="title">{b.title}</div>
-        <div className="author">{b.author}</div>
-        {b.pageCount&&<div className="pages-info"><span>📄</span><span>{b.pageCount} pages</span></div>}
-        <div className="card-foot">
-          <div>
-            <div className="price">{b.price}</div>
-            <div className="stock-lbl">{b.hasFile?"📥 Téléchargement immédiat":"⏳ Bientôt dispo"}</div>
-          </div>
-          <div style={{display:"flex",flexDirection:"column",gap:".3rem"}}>
-            <button className="add-btn" onClick={e=>{e.stopPropagation();addCart(b);}}>Acheter</button>
-            {admin&&(
-              <div style={{display:"flex",gap:".25rem"}}>
-                <button className="btn btn-ghost btn-sm" onClick={e=>{e.stopPropagation();openEdit(b);}}>✏️</button>
-                <button className="btn btn-ghost btn-sm" onClick={e=>{e.stopPropagation();toggleFeatured(b);}}>{b.featured?"⭐":"☆"}</button>
-                <button className="btn btn-red btn-sm"   onClick={e=>{e.stopPropagation();delBook(b);}}>🗑️</button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  // ─── BookCard avec callbacks stables (pour React.memo) ────────────────────
+  const renderBookCard = useCallback((b, admin=false) => (
+    <BookCard
+      key={b.fbKey}
+      b={b}
+      admin={admin}
+      wished={wishlist.includes(b.fbKey)}
+      onAddCart={addCart}
+      onToggleWish={toggleWish}
+      onOpenDetail={openDetail}
+      onEdit={openEdit}
+      onDelete={delBook}
+      onToggleFeatured={toggleFeatured}
+    />
+  ), [wishlist, addCart, toggleWish, openDetail, openEdit, delBook, toggleFeatured]);
 
   // ─────────────────────────────────────────────────────────────
   // RENDER
   // ─────────────────────────────────────────────────────────────
   return (
     <>
-      <style>{CSS}</style>
-
       {/* NAV */}
       <nav className="nav">
         <div className="logo" onClick={()=>setView("home")}>Lib<em>rairie</em> YO</div>
@@ -1000,7 +787,7 @@ export default function App() {
           <div className="featured-section">
             <div className="featured-title">⭐ Coups de cœur</div>
             <div className="featured-scroll">
-              {featuredBooks.map(b=><div key={b.fbKey} className="featured-card"><BookCard b={b} admin={false}/></div>)}
+              {featuredBooks.map(b=><div key={b.fbKey} className="featured-card">{renderBookCard(b,false)}</div>)}
             </div>
           </div>
         )}
@@ -1027,136 +814,43 @@ export default function App() {
               <p>{activeCat==="__wish__"?"Aucun favori pour l'instant":search||activeCat?"Aucun résultat":"Aucun livre pour l'instant"}</p>
             </div>
           ):(
-            <div className="grid">{filtered.map(b=><BookCard key={b.fbKey} b={b} admin={isAdmin}/>)}</div>
+            <div className="grid">{filtered.map(b=>renderBookCard(b, isAdmin))}</div>
           )}
         </div>
       </>}
 
-      {/* ══ ADMIN ══ */}
+      {/* ══ ADMIN — chargé uniquement si admin connecté ══ */}
       {view==="admin"&&isAdmin&&(
-        <div className="page">
-          <div style={{display:"flex",alignItems:"center",gap:"1rem",marginBottom:"1.5rem",flexWrap:"wrap"}}>
-            <button className="btn btn-ghost btn-sm" onClick={()=>setView("home")}>← Retour</button>
-            <span style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:"1.35rem",color:"var(--cream)"}}>Administration</span>
+        <Suspense fallback={
+          <div style={{textAlign:"center",padding:"4rem",color:"var(--muted)"}}>
+            <span className="spin">⚙️</span> Chargement…
           </div>
-          <div className="admin-tabs">
-            <button className={`tab ${adminTab==="stats"?"active":""}`}  onClick={()=>setAdminTab("stats")}>📊 Stats</button>
-            <button className={`tab ${adminTab==="books"?"active":""}`}  onClick={()=>setAdminTab("books")}>📚 Catalogue</button>
-            <button className={`tab ${adminTab==="orders"?"active":""}`} onClick={()=>setAdminTab("orders")}>
-              📦 Commandes{pendingCount>0&&<span className="badge" style={{marginLeft:".3rem"}}>{pendingCount}</span>}
-              <span className="live-badge"><span className="live-dot"/>LIVE</span>
-            </button>
-            <button className={`tab ${adminTab==="promos"?"active":""}`} onClick={()=>setAdminTab("promos")}>🏷️ Promos</button>
-          </div>
-
-          {adminTab==="stats"&&<>
-            <div className="stats-grid">
-              {[
-                {icon:"💰",val:fmtGNF(statsData.totalRevenue),lbl:"Revenus totaux"},
-                {icon:"📅",val:fmtGNF(statsData.monthRevenue),lbl:"Ce mois-ci"},
-                {icon:"📦",val:adminOrders.length,lbl:"Total commandes"},
-                {icon:"⏳",val:statsData.pending,lbl:"En attente"},
-                {icon:"✅",val:statsData.approved,lbl:"Approuvées"},
-                {icon:"❌",val:statsData.rejected,lbl:"Rejetées"},
-                {icon:"📚",val:books.length,lbl:"Livres publiés"},
-                {icon:"❤️",val:books.filter(b=>b.featured).length,lbl:"Mis en avant"},
-              ].map(s=>(
-                <div key={s.lbl} className="stat-card">
-                  <div className="stat-icon">{s.icon}</div>
-                  <div className="stat-val">{s.val}</div>
-                  <div className="stat-lbl">{s.lbl}</div>
-                </div>
-              ))}
-            </div>
-            {statsData.topBooks.length>0&&<>
-              <div className="grid-title" style={{marginBottom:"1rem"}}>🏆 Top livres vendus</div>
-              {statsData.topBooks.map((b,i)=>(
-                <div key={b.title} className="top-book-row">
-                  <span style={{color:"var(--gold)",fontWeight:700,fontSize:"1rem",width:20}}>#{i+1}</span>
-                  <span style={{flex:1,color:"var(--text)",fontSize:".88rem"}}>{b.title}</span>
-                  <span style={{color:"var(--gold)",fontWeight:700}}>{b.count} vendu{b.count>1?"s":""}</span>
-                </div>
-              ))}
-            </>}
-            {adminOrders.length>0&&<div style={{marginTop:"1.5rem"}}><button className="btn btn-ghost" onClick={()=>exportCSV(adminOrders)}>📥 Exporter (CSV)</button></div>}
-          </>}
-
-          {adminTab==="books"&&<>
-            <div style={{display:"flex",gap:".7rem",marginBottom:"1.2rem",alignItems:"center",flexWrap:"wrap"}}>
-              <button className="btn btn-gold" onClick={openAdd}>+ Nouveau livre</button>
-              <input className="search-input" style={{flex:1,minWidth:200,marginBottom:0}} placeholder="Rechercher…" value={adminSearch} onChange={e=>setAdminSearch(e.target.value)}/>
-            </div>
-            {filteredAdminBooks.length===0?<div className="empty"><p>Aucun livre trouvé</p></div>
-              :<div className="grid">{filteredAdminBooks.map(b=><BookCard key={b.fbKey} b={b} admin={true}/>)}</div>}
-          </>}
-
-          {adminTab==="orders"&&<>
-            <div style={{display:"flex",gap:".7rem",marginBottom:"1rem",flexWrap:"wrap"}}>
-              <input className="search-input" style={{flex:1,marginBottom:0}} placeholder="Nom, téléphone, ID transaction…" value={orderSearch} onChange={e=>setOrderSearch(e.target.value)}/>
-              <button className="btn btn-ghost btn-sm" onClick={()=>exportCSV(filteredOrders)}>📥 CSV</button>
-            </div>
-            {filteredOrders.length===0&&<div className="empty"><div style={{fontSize:"2rem",marginBottom:".5rem"}}>📭</div><p>Aucune commande</p></div>}
-            {filteredOrders.map(order=>(
-              <div key={order.fbKey} className="order-row">
-                <div className="order-row-head">
-                  <div className="order-meta">
-                    <strong>{order.name}</strong><br/>📞 {order.phone}<br/>🕐 {fmtDate(order.createdAt)}
-                    {order.promoCode&&<><br/>🏷️ <span style={{color:"var(--gold)"}}>{order.promoCode}</span> (-{fmtGNF(order.discount||0)})</>}
-                  </div>
-                  <div style={{textAlign:"right"}}>
-                    <span className={`status-badge status-${order.status}`}>
-                      {order.status==="pending"?"⏳ En attente":order.status==="approved"?"✅ Approuvée":"❌ Rejetée"}
-                    </span>
-                    <div style={{marginTop:".4rem",color:"var(--gold)",fontWeight:700,fontSize:".9rem"}}>{fmtGNF(order.total)}</div>
-                    {order.originalTotal&&order.originalTotal!==order.total&&<div style={{fontSize:".7rem",color:"var(--muted)",textDecoration:"line-through"}}>{fmtGNF(order.originalTotal)}</div>}
-                  </div>
-                </div>
-                <div className="order-items">
-                  {(order.items||[]).map((it,i)=><div key={i}>{it.emoji||"📚"} {it.title} × {it.qty} — <span style={{color:"var(--gold)"}}>{fmtGNF(it.price)}</span></div>)}
-                </div>
-                <div><span style={{fontSize:".72rem",color:"var(--muted)"}}>ID transaction OM : </span><span className="order-tx">{order.txId}</span></div>
-                {order.status==="pending"&&(
-                  <div className="order-actions">
-                    <button className="btn btn-green btn-sm" onClick={()=>setOrderStatus(order.fbKey,"approved")}>✅ Valider</button>
-                    <button className="btn btn-red btn-sm"   onClick={()=>setOrderStatus(order.fbKey,"rejected")}>❌ Rejeter</button>
-                  </div>
-                )}
-                {order.status!=="pending"&&order.reviewedAt&&(
-                  <div style={{fontSize:".72rem",color:order.status==="approved"?"var(--green)":"#f08080",marginTop:".5rem"}}>
-                    {order.status==="approved"?"✅ Validé":"❌ Rejeté"} le {fmtDate(order.reviewedAt)}
-                  </div>
-                )}
-              </div>
-            ))}
-          </>}
-
-          {adminTab==="promos"&&<>
-            <div className="promo-form">
-              <div style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:"1.1rem",color:"var(--cream)",marginBottom:"1rem"}}>🏷️ Créer un code promo</div>
-              <div className="fr">
-                <div className="fg"><label className="fl">Code</label><input className="fi" style={{textTransform:"uppercase"}} value={promoForm.code} onChange={e=>setPromoForm(p=>({...p,code:e.target.value.toUpperCase()}))} placeholder="EX: YO20"/></div>
-                <div className="fg"><label className="fl">Réduction</label><input className="fi" type="number" value={promoForm.discount} onChange={e=>setPromoForm(p=>({...p,discount:e.target.value}))} placeholder="20"/></div>
-              </div>
-              <div className="fr">
-                <div className="fg"><label className="fl">Type</label><select className="fs" value={promoForm.type} onChange={e=>setPromoForm(p=>({...p,type:e.target.value}))}><option value="percent">% Pourcentage</option><option value="fixed">Montant fixe (GNF)</option></select></div>
-                <div className="fg"><label className="fl">Utilisations max</label><input className="fi" type="number" value={promoForm.maxUses} onChange={e=>setPromoForm(p=>({...p,maxUses:e.target.value}))}/></div>
-              </div>
-              <button className="btn btn-gold" onClick={addPromoCode}>+ Créer le code</button>
-            </div>
-            {promoCodes.length===0&&<div className="empty"><p>Aucun code promo créé</p></div>}
-            {[...promoCodes].sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(p=>(
-              <div key={p.fbKey} className="promo-code-row">
-                <div className="promo-code-label" style={{color:p.active?"var(--gold)":"var(--muted)"}}>{p.code}</div>
-                <div style={{flex:1,fontSize:".8rem",color:"var(--muted)"}}>{p.type==="percent"?`-${p.discount}%`:`-${fmtGNF(p.discount)}`}{" · "}{p.uses||0}/{p.maxUses||"∞"} utilisations</div>
-                <span className={`status-badge ${p.active?"status-approved":"status-rejected"}`}>{p.active?"Actif":"Inactif"}</span>
-                <div style={{display:"flex",gap:".4rem"}}>
-                  <button className="btn btn-ghost btn-sm" onClick={()=>togglePromo(p)}>{p.active?"Désactiver":"Activer"}</button>
-                  <button className="btn btn-red btn-sm"   onClick={()=>deletePromo(p)}>🗑️</button>
-                </div>
-              </div>
-            ))}
-          </>}
-        </div>
+        }>
+          <AdminPanel
+            books={books}
+            adminOrders={adminOrders}
+            promoCodes={promoCodes}
+            adminTab={adminTab}
+            setAdminTab={setAdminTab}
+            adminSearch={adminSearch}
+            setAdminSearch={setAdminSearch}
+            orderSearch={orderSearch}
+            setOrderSearch={setOrderSearch}
+            pendingCount={pendingCount}
+            statsData={statsData}
+            filteredAdminBooks={filteredAdminBooks}
+            filteredOrders={filteredOrders}
+            onAddBook={openAdd}
+            onSetOrderStatus={setOrderStatus}
+            onAddPromo={addPromoCode}
+            onTogglePromo={togglePromo}
+            onDeletePromo={deletePromo}
+            promoForm={promoForm}
+            setPromoForm={setPromoForm}
+            onClose={()=>setView("home")}
+            BookCard={({b, admin})=>renderBookCard(b, admin)}
+          />
+        </Suspense>
       )}
 
       {/* ══ PENDING ══ */}
