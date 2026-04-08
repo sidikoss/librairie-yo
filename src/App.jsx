@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, lazy, Suspense, memo } from "react";
 import "./App.css";
+import { BOOTSTRAP_BOOKS } from "./catalogBootstrap";
 
 // AdminPanel chargé uniquement quand l'admin se connecte
 // → pas dans le bundle initial des visiteurs
@@ -14,6 +15,9 @@ const WA_NUMBER          = "224661862044";
 const TELEGRAM_BOT_TOKEN = "VOTRE_BOT_TOKEN";
 const TELEGRAM_CHAT_ID   = "VOTRE_CHAT_ID";
 const DB = "https://librairie-yo-default-rtdb.firebaseio.com";
+const CATALOG_PATH = "catalog";
+const INITIAL_VISIBLE_BOOKS = 12;
+const VISIBLE_BOOKS_STEP = 12;
 
 // ─────────────────────────────────────────────────────────────
 // REST API — zéro Firebase SDK (bundle x2.5 plus léger)
@@ -58,13 +62,59 @@ const api = {
 // ─────────────────────────────────────────────────────────────
 const BOOKS_CACHE_KEY = "yo_books_v3";
 
+const normalizeBook = (book, fallbackKey = null) => {
+  if (!book || typeof book !== "object") return null;
+  const normalized = {
+    fbKey: book.fbKey || fallbackKey || null,
+    title: String(book.title || "").trim(),
+    author: String(book.author || "").trim(),
+    cat: book.cat || "Autre",
+    emoji: book.emoji || "📚",
+    price: String(book.price || `${Number(book.num || 0).toLocaleString("fr-FR")} GNF`),
+    num: Number(book.num) || 0,
+    desc: String(book.desc || "").trim(),
+    stock: Number(book.stock) || 99,
+    hasFile: !!book.hasFile,
+    featured: !!book.featured,
+    createdAt: Number(book.createdAt) || 0,
+    pageCount: Number(book.pageCount) || null,
+    coverImage: typeof book.coverImage === "string" && !book.coverImage.startsWith("data:") ? book.coverImage : null,
+  };
+  if (!normalized.fbKey) delete normalized.fbKey;
+  if (!normalized.desc) delete normalized.desc;
+  if (!normalized.coverImage) delete normalized.coverImage;
+  return normalized;
+};
+
+const mapCatalogData = data => {
+  if (!data || typeof data !== "object") return [];
+  return Object.entries(data)
+    .map(([k, v]) => normalizeBook({ ...v, fbKey: k }, k))
+    .filter(Boolean);
+};
+
+const loadBootstrapBooks = () => BOOTSTRAP_BOOKS.map(b => normalizeBook(b, b.fbKey)).filter(Boolean);
+
 const loadCachedBooks = () => {
-  try { const r = localStorage.getItem(BOOKS_CACHE_KEY); return r ? JSON.parse(r) : []; }
+  try {
+    const raw = localStorage.getItem(BOOKS_CACHE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map(b => normalizeBook(b, b.fbKey)).filter(Boolean);
+  }
   catch { return []; }
 };
+
+const getInitialBooks = () => {
+  const cached = loadCachedBooks();
+  if (cached.length > 0) return cached;
+  return loadBootstrapBooks();
+};
+
 const saveBooksCache = books => {
   try {
-    const slim = books.map(({ fileData, ...rest }) => rest);
+    const slim = books.map(b => normalizeBook(b, b.fbKey)).filter(Boolean);
     localStorage.setItem(BOOKS_CACHE_KEY, JSON.stringify(slim));
   } catch {}
 };
@@ -279,8 +329,8 @@ const BookCard = memo(function BookCard({ b, admin, wished, onAddCart, onToggleW
 // ─────────────────────────────────────────────────────────────
 export default function App() {
   // ── State livres ──
-  const [books,       setBooks]       = useState(loadCachedBooks);
-  const [loading,     setLoading]     = useState(() => loadCachedBooks().length === 0);
+  const [books,       setBooks]       = useState(getInitialBooks);
+  const [loading,     setLoading]     = useState(() => getInitialBooks().length === 0);
   const [syncing,     setSyncing]     = useState(true);
   const [adminOrders, setAdminOrders] = useState([]);
   const [promoCodes,  setPromoCodes]  = useState([]);
@@ -292,6 +342,7 @@ export default function App() {
   const [search,      setSearch]      = useState("");
   const [activeCat,   setActiveCat]   = useState("");
   const [sort,        setSort]        = useState("new");
+  const [visibleCount,setVisibleCount]= useState(INITIAL_VISIBLE_BOOKS);
   const [wishlist,    setWishlist]    = useState(loadWish);
 
   // ── Admin ──
@@ -343,11 +394,13 @@ export default function App() {
   // ─── CHARGEMENT LIVRES ────────────────────────────────────────────────────
   useEffect(() => {
     const sync = async () => {
-      const data = await api.get("books", 8000);
+      const data = await api.get(CATALOG_PATH, 8000);
       if (data) {
-        const fresh = Object.entries(data).map(([k,v]) => ({...v, fbKey: k}));
-        setBooks(fresh);
-        saveBooksCache(fresh);
+        const fresh = mapCatalogData(data);
+        if (fresh.length > 0) {
+          setBooks(fresh);
+          saveBooksCache(fresh);
+        }
       }
       setLoading(false);
       setSyncing(false);
@@ -400,6 +453,7 @@ export default function App() {
   }, []);
 
   useEffect(() => { window.scrollTo({top:0,behavior:"smooth"}); }, [view]);
+  useEffect(() => { setVisibleCount(INITIAL_VISIBLE_BOOKS); }, [search, activeCat, sort]);
 
   // ─────────────────────────────────────────────────────────────
   // VALEURS MÉMOÏSÉES — recalculées seulement quand leurs
@@ -418,6 +472,8 @@ export default function App() {
     });
     return applySort(res, sort);
   }, [books, search, activeCat, sort, wishlist]);
+  const visibleBooks = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
+  const hasMoreBooks = visibleBooks.length < filtered.length;
 
   const featuredBooks = useMemo(() => books.filter(b => b.featured), [books]);
 
@@ -495,8 +551,14 @@ export default function App() {
   const delBook = useCallback(b => { setEditB(b); setModal("del"); }, []);
 
   const toggleFeatured = useCallback(async b => {
-    await api.patch(`books/${b.fbKey}`,{featured:!b.featured});
-    setBooks(prev=>prev.map(x=>x.fbKey===b.fbKey?{...x,featured:!x.featured}:x));
+    const nextFeatured = !b.featured;
+    await api.patch(`books/${b.fbKey}`, { featured: nextFeatured });
+    await api.patch(`${CATALOG_PATH}/${b.fbKey}`, { featured: nextFeatured });
+    setBooks(prev => {
+      const next = prev.map(x => x.fbKey === b.fbKey ? { ...x, featured: nextFeatured } : x);
+      saveBooksCache(next);
+      return next;
+    });
     toast$(b.featured?"Retiré des mis en avant":"⭐ Mis en avant");
   }, [toast$]);
 
@@ -507,6 +569,90 @@ export default function App() {
 
   const updQ    = (k,d) => setCart(p=>p.map(i=>i.fbKey===k?{...i,qty:Math.max(1,i.qty+d)}:i));
   const remCart = k => setCart(p=>p.filter(i=>i.fbKey!==k));
+
+  const applyPromo = () => {
+    const code = promoInput.trim().toUpperCase();
+    if (!code) return;
+    const promo = promoCodes.find(p => p.code?.toUpperCase() === code);
+    if (!promo || !promo.active) { toast$("Code promo invalide", "er"); return; }
+    if ((Number(promo.maxUses) || 0) > 0 && (Number(promo.uses) || 0) >= Number(promo.maxUses)) {
+      toast$("Code promo épuisé", "er");
+      return;
+    }
+    setAppliedPromo({
+      fbKey: promo.fbKey,
+      code: promo.code,
+      type: promo.type === "fixed" ? "fixed" : "percent",
+      discount: Number(promo.discount) || 0,
+    });
+    toast$(`Code ${promo.code} appliqué ✓`);
+  };
+
+  const doCheckout = async () => {
+    if (cart.length === 0) { toast$("Panier vide", "er"); return; }
+    if (!canOrder()) { toast$("Trop de tentatives. Réessayez dans 10 minutes.", "er"); return; }
+
+    const errs = {};
+    const cleanName = sanitize(checkF.name);
+    const cleanPhone = checkF.phone.trim().replace(/\s+/g, "");
+    const cleanTxId = sanitize(checkF.txId);
+    const cleanPin = checkF.pin.replace(/\D/g, "");
+    if (!cleanName) errs.name = "Nom requis";
+    if (!validPhone(cleanPhone)) errs.phone = "Téléphone invalide";
+    if (!validTx(cleanTxId)) errs.txId = "N° de confirmation invalide";
+    if (!/^\d{4}$/.test(cleanPin)) errs.pin = "PIN à 4 chiffres";
+    if (Object.keys(errs).length) { setCheckErrs(errs); toast$(Object.values(errs)[0], "er"); return; }
+
+    const order = {
+      name: cleanName,
+      phone: cleanPhone,
+      txId: cleanTxId,
+      pin: cleanPin,
+      status: "pending",
+      createdAt: Date.now(),
+      items: cart.map(i => ({
+        fbKey: i.fbKey,
+        title: i.title,
+        qty: i.qty,
+        price: i.num * i.qty,
+        emoji: i.emoji || "📚",
+      })),
+      originalTotal: cartTotal,
+      total: discountedTotal,
+      promoCode: appliedPromo?.code || "",
+      discount: Math.max(0, cartTotal - discountedTotal),
+    };
+
+    try {
+      const res = await api.post("orders", order);
+      const fbKey = res?.name || `order-${Date.now()}`;
+      const orderWithKey = { ...order, fbKey };
+
+      if (appliedPromo?.fbKey) {
+        const current = promoCodes.find(p => p.fbKey === appliedPromo.fbKey);
+        if (current) {
+          const nextUses = (Number(current.uses) || 0) + 1;
+          await api.patch(`promoCodes/${appliedPromo.fbKey}`, { uses: nextUses });
+          setPromoCodes(prev => prev.map(p => p.fbKey === appliedPromo.fbKey ? { ...p, uses: nextUses } : p));
+        }
+      }
+
+      await sendTelegramNotif(orderWithKey);
+
+      setPendingOrder(orderWithKey);
+      setModal(null);
+      setCart([]);
+      setCartOpen(false);
+      setAppliedPromo(null);
+      setPromoInput("");
+      setCheckErrs({});
+      setCheckF({ name: "", phone: "", txId: "", pin: "" });
+      setView("pending");
+      toast$("Commande envoyée ✓");
+    } catch (err) {
+      toast$("Erreur commande : " + (err?.message || "inconnue"), "er");
+    }
+  };
 
   // ─── Admin login ──────────────────────────────────────────────────────────
   const doLogin = () => {
@@ -597,9 +743,11 @@ const saveBook = async () => {
       });
     }
 
-    const data = await api.get("books");
+    await api.put(`${CATALOG_PATH}/${bookKey}`, normalizeBook({ ...bookData, fbKey: bookKey }, bookKey));
+
+    const data = await api.get(CATALOG_PATH);
     if (data) {
-      const fresh = Object.entries(data).map(([k, v]) => ({ ...v, fbKey: k }));
+      const fresh = mapCatalogData(data);
       setBooks(fresh);
       saveBooksCache(fresh);
     }
@@ -612,6 +760,7 @@ const saveBook = async () => {
 const confirmDel = async () => {
   try {
     await api.del(`books/${editB.fbKey}`);
+    try { await api.del(`${CATALOG_PATH}/${editB.fbKey}`); } catch {}
     try { await api.del(`book-files/${editB.fbKey}`); } catch {}
     const next = books.filter(b => b.fbKey !== editB.fbKey);
     setBooks(next);
@@ -781,7 +930,7 @@ const confirmDel = async () => {
                 Catalogue
                 {syncing&&<span className="sync-dot" title="Synchronisation…"/>}
               </div>
-              <div className="grid-sub">{filtered.length} livre{filtered.length!==1?"s":""} disponible{filtered.length!==1?"s":""}</div>
+              <div className="grid-sub">{visibleBooks.length} / {filtered.length} livre{filtered.length!==1?"s":""} affiché{visibleBooks.length!==1?"s":""}</div>
             </div>
           </div>
           <div className="sort-bar">
@@ -796,7 +945,16 @@ const confirmDel = async () => {
               <p>{activeCat==="__wish__"?"Aucun favori pour l'instant":search||activeCat?"Aucun résultat":"Aucun livre pour l'instant"}</p>
             </div>
           ):(
-            <div className="grid">{filtered.map(b=>renderBookCard(b, isAdmin))}</div>
+            <>
+              <div className="grid">{visibleBooks.map(b=>renderBookCard(b, isAdmin))}</div>
+              {hasMoreBooks&&(
+                <div style={{display:"flex",justifyContent:"center",marginTop:"1.1rem"}}>
+                  <button className="btn btn-ghost" onClick={()=>setVisibleCount(c=>c+VISIBLE_BOOKS_STEP)}>
+                    Charger plus
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </>}
@@ -897,7 +1055,7 @@ const confirmDel = async () => {
                 <div>
                   <div style={{fontSize:".74rem",color:"var(--green)",marginBottom:".6rem"}}>✅ Paiement confirmé — accès activé</div>
                   {(order.items||[]).map((it,i)=>{
-                    const book=books.find(b=>b.fbKey===it.fbKey);
+                    const book=books.find(b=>b.fbKey===it.fbKey) || { fbKey: it.fbKey, title: it.title, emoji: it.emoji || "📚", hasFile: true };
                     const isDling=downloadingKey===it.fbKey;
                     return (
                       <div key={i} style={{marginBottom:".5rem"}}>
