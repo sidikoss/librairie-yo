@@ -549,111 +549,85 @@ export default function App() {
   };
 
   // ─── Sauvegarde livre ─────────────────────────────────────────────────────
-  const saveBook = async () => {
-    const errs={};
-    if (!form.title.trim()) errs.title="Titre requis";
-    if (!form.author.trim()) errs.author="Auteur requis";
-    if (!form.num||isNaN(form.num)) errs.num="Prix requis";
-    if (Object.keys(errs).length) { setFormFieldErrs(errs); return; }
-   
-const computedPrice = form.price 
-  ? sanitize(form.price) 
-  : Number(form.num || 0).toLocaleString("fr-FR") + " GNF";
+ const saveBook = async () => {
+  const errs = {};
+  if (!form.title.trim()) errs.title = "Titre requis";
+  if (!form.author.trim()) errs.author = "Auteur requis";
+  if (!form.num || isNaN(form.num)) errs.num = "Prix requis";
+  if (Object.keys(errs).length) { setFormFieldErrs(errs); return; }
 
-const bookData = {
-  title: sanitize(form.title),
-  author: sanitize(form.author),
-  cat: form.cat || "Autre",
-  emoji: form.emoji || "📚",
-  price: computedPrice,
-  num: Number(form.num) || 0,
-  desc: sanitize(form.desc || ""),
-  stock: Number(form.stock) || 99,
-  hasFile: uploadedFile ? true : (editB?.hasFile || false)
+  // Calcul sécurisé du prix
+  const computedPrice = form.price 
+    ? sanitize(form.price) 
+    : Number(form.num || 0).toLocaleString("fr-FR") + " GNF";
+
+  // Préparation de bookData
+  const bookData = {
+    title: sanitize(form.title),
+    author: sanitize(form.author),
+    cat: form.cat || "Autre",
+    emoji: form.emoji || "📚",
+    price: computedPrice,
+    num: Number(form.num) || 0,
+    desc: sanitize(form.desc || ""),
+    stock: Number(form.stock) || 99,
+    hasFile: uploadedFile ? true : (editB?.hasFile || false),
+    coverImage: extractedCover || editB?.coverImage || null,
+    pageCount: pageCount || editB?.pageCount || null,
+    featured: editB?.featured || false,
+    createdAt: modal === "add" ? Date.now() : (editB?.createdAt || Date.now())
+  };
+
+  try {
+    let bookKey;
+    if (modal === "add") {
+      const res = await api.post("books", bookData);
+      bookKey = res.name;
+      toast$(`"${form.title}" publié ✓`);
+    } else {
+      await api.patch(`books/${editB.fbKey}`, bookData);
+      bookKey = editB.fbKey;
+      toast$(`"${form.title}" mis à jour ✓`);
+    }
+
+    // Upload du fichier si nécessaire
+    if (uploadedFile) {
+      await api.put(`book-files/${bookKey}`, {
+        fileData: uploadedFile.b64,
+        fileName: uploadedFile.name,
+        fileType: uploadedFile.type
+      });
+    }
+
+    // Rafraîchir la liste des livres
+    const data = await api.get("books");
+    if (data) {
+      const fresh = Object.entries(data).map(([k,v]) => ({ ...v, fbKey: k }));
+      setBooks(fresh);
+      saveBooksCache(fresh);
+    }
+    setModal(null);
+
+  } catch(err) {
+    console.error(err);
+    toast$("Erreur : " + err.message, "er");
+  }
 };
 
-      hasFile:uploadedFile?true:(editB?.hasFile||false),
-      coverImage:extractedCover||editB?.coverImage||null,
-      pageCount:pageCount||editB?.pageCount||null,
-      featured:editB?.featured||false,
-      createdAt:modal==="add"?Date.now():(editB?.createdAt||Date.now()),
-    };
-    try {
-      let bookKey;
-      if (modal==="add") {
-        const res = await api.post("books", bookData);
-        bookKey = res.name;
-        toast$(`"${form.title}" publié ✓`);
-      } else {
-        await api.patch(`books/${editB.fbKey}`, bookData);
-        bookKey = editB.fbKey;
-        toast$(`"${form.title}" mis à jour ✓`);
-      }
-      if (uploadedFile) {
-        await api.put(`book-files/${bookKey}`, {fileData:uploadedFile.b64,fileName:uploadedFile.name,fileType:uploadedFile.type});
-      }
-      const data = await api.get("books");
-      if (data) { const fresh=Object.entries(data).map(([k,v])=>({...v,fbKey:k})); setBooks(fresh); saveBooksCache(fresh); }
-      setModal(null);
-    } catch(err) { toast$("Erreur : "+err.message,"er"); }
-  };
-
-  const confirmDel = async () => {
+const confirmDel = async () => {
+  try {
     await api.del(`books/${editB.fbKey}`);
     try { await api.del(`book-files/${editB.fbKey}`); } catch {}
-    const next = books.filter(b=>b.fbKey!==editB.fbKey);
+    const next = books.filter(b => b.fbKey !== editB.fbKey);
     setBooks(next);
     saveBooksCache(next);
-    toast$("Livre supprimé","er"); setModal(null);
-  };
-
-  // ─── Checkout ─────────────────────────────────────────────────────────────
-  const applyPromo = () => {
-    const code=promoCodes.find(p=>p.active&&p.code.toUpperCase()===promoInput.trim().toUpperCase());
-    if (!code)                                         { toast$("Code promo invalide ou inactif","er"); return; }
-    if (code.maxUses&&(code.uses||0)>=code.maxUses)    { toast$("Ce code promo a expiré","er"); return; }
-    setAppliedPromo(code);
-    toast$(`Code "${code.code}" appliqué — ${code.type==="percent"?code.discount+"%":fmtGNF(code.discount)} de réduction ✓`);
-  };
-
-  const doCheckout = async () => {
-    const errs={};
-    if (!checkF.name.trim())           errs.name="Nom requis";
-    if (!checkF.phone.trim())          errs.phone="Téléphone requis";
-    else if (!validPhone(checkF.phone)) errs.phone="Format invalide (9–15 chiffres)";
-    if (!checkF.txId.trim())           errs.txId="N° transaction requis";
-    else if (!validTx(checkF.txId))    errs.txId="Minimum 4 caractères";
-    if (!/^\d{4}$/.test(checkF.pin))   errs.pin="PIN à 4 chiffres requis";
-    if (Object.keys(errs).length) { setCheckErrs(errs); return; }
-    if (!canOrder()) { toast$("Trop de tentatives — réessayez dans 10 minutes","er"); return; }
-    try {
-      const allOrders=await api.get("orders");
-      if (allOrders) {
-        const dup=Object.values(allOrders).find(o=>o.txId===checkF.txId.trim().toUpperCase());
-        if (dup) { toast$("Ce numéro de transaction a déjà été utilisé","er"); return; }
-      }
-    } catch {}
-    const orderData = {
-      name:sanitize(checkF.name),phone:checkF.phone.trim().replace(/\s+/g,""),
-      txId:checkF.txId.trim().toUpperCase(),pin:checkF.pin,
-      total:discountedTotal,originalTotal:cartTotal,discount:cartTotal-discountedTotal,
-      promoCode:appliedPromo?.code||null,
-      items:cart.map(i=>({fbKey:i.fbKey,title:i.title,author:i.author,emoji:i.emoji,qty:i.qty,price:i.num*i.qty})),
-      status:"pending",createdAt:Date.now(),
-    };
-    try {
-      const res = await api.post("orders", orderData);
-      const fbKey = res.name;
-      if (appliedPromo) await api.patch(`promoCodes/${appliedPromo.fbKey}`,{uses:(appliedPromo.uses||0)+1});
-      const saved={...orderData,fbKey};
-      setPendingOrder(saved);
-      sendTelegramNotif(saved).catch(()=>{});
-      setCart([]); setModal(null); setCartOpen(false);
-      setCheckF({name:"",phone:"",txId:"",pin:""}); setCheckErrs({});
-      setAppliedPromo(null); setPromoInput("");
-      setView("pending");
-    } catch(err) { toast$("Erreur : "+err.message,"er"); }
-  };
+    toast$("Livre supprimé", "er");
+    setModal(null);
+  } catch(err) {
+    console.error(err);
+    toast$("Erreur suppression : " + err.message, "er");
+  }
+};
 
   // ─── Mes commandes ────────────────────────────────────────────────────────
   const checkMyOrders = async () => {
