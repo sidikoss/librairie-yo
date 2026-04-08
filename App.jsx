@@ -556,12 +556,16 @@ export default function App() {
     if (!form.num||isNaN(form.num)) errs.num="Prix requis";
     if (Object.keys(errs).length) { setFormFieldErrs(errs); return; }
    
+const computedPrice = form.price 
+  ? sanitize(form.price) 
+  : Number(form.num || 0).toLocaleString("fr-FR") + " GNF";
+
 const bookData = {
   title: sanitize(form.title),
   author: sanitize(form.author),
   cat: form.cat || "Autre",
   emoji: form.emoji || "📚",
-  price: form.price ? sanitize(form.price) : (Number(form.num || 0).toLocaleString("fr-FR") + " GNF"),
+  price: computedPrice,
   num: Number(form.num) || 0,
   desc: sanitize(form.desc || ""),
   stock: Number(form.stock) || 99,
