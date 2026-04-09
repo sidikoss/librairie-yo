@@ -18,6 +18,10 @@ const DB = "https://librairie-yo-default-rtdb.firebaseio.com";
 const CATALOG_PATH = "catalog";
 const INITIAL_VISIBLE_BOOKS = 12;
 const VISIBLE_BOOKS_STEP = 12;
+const PRICE_BASE_GNF = 5000;
+const PRICE_STEP_GNF = 5000;
+const PRICE_PAGES_PER_STEP = 150;
+const PRICE_MAX_GNF = 25000;
 
 // ─────────────────────────────────────────────────────────────
 // REST API — zéro Firebase SDK (bundle x2.5 plus léger)
@@ -62,16 +66,29 @@ const api = {
 // ─────────────────────────────────────────────────────────────
 const BOOKS_CACHE_KEY = "yo_books_v3";
 
+const formatPriceLabel = num => `${Number(num || 0).toLocaleString("fr-FR")} GNF`;
+
+const autoPriceFromPageCount = pageCount => {
+  const pages = Number(pageCount) || 0;
+  const steps = Math.max(1, Math.ceil(Math.max(1, pages) / PRICE_PAGES_PER_STEP));
+  const computed = PRICE_BASE_GNF + (steps - 1) * PRICE_STEP_GNF;
+  return Math.min(PRICE_MAX_GNF, computed);
+};
+
 const normalizeBook = (book, fallbackKey = null) => {
   if (!book || typeof book !== "object") return null;
+  const rawNum = Number(book.num);
+  const hasManualNum = Number.isFinite(rawNum) && rawNum > 0;
+  const fallbackNum = autoPriceFromPageCount(book.pageCount);
+  const normalizedNum = hasManualNum ? rawNum : fallbackNum;
   const normalized = {
     fbKey: book.fbKey || fallbackKey || null,
     title: String(book.title || "").trim(),
     author: String(book.author || "").trim(),
     cat: book.cat || "Autre",
     emoji: book.emoji || "📚",
-    price: String(book.price || `${Number(book.num || 0).toLocaleString("fr-FR")} GNF`),
-    num: Number(book.num) || 0,
+    price: String((hasManualNum && book.price) ? book.price : formatPriceLabel(normalizedNum)),
+    num: normalizedNum,
     desc: String(book.desc || "").trim(),
     stock: Number(book.stock) || 99,
     hasFile: !!book.hasFile,
@@ -588,7 +605,10 @@ const SkeletonCard = () => (
 // BOOK CARD — mémoïsée : ne se re-render que si ses props changent
 // ─────────────────────────────────────────────────────────────
 const BookCard = memo(function BookCard({ b, admin, wished, onAddCart, onToggleWish, onOpenDetail, onEdit, onDelete, onToggleFeatured }) {
-  const canBuy = Number(b?.num) > 0;
+  const hasManualNum = Number(b?.num) > 0;
+  const effectiveNum = hasManualNum ? Number(b.num) : autoPriceFromPageCount(b?.pageCount);
+  const effectivePrice = hasManualNum ? (b.price || formatPriceLabel(effectiveNum)) : formatPriceLabel(effectiveNum);
+  const canBuy = effectiveNum > 0;
   return (
     <div className="card" onClick={()=>onOpenDetail(b)}>
       <div className="card-cover">
@@ -609,8 +629,8 @@ const BookCard = memo(function BookCard({ b, admin, wished, onAddCart, onToggleW
         {b.pageCount&&<div className="pages-info"><span>📄</span><span>{b.pageCount} pages</span></div>}
         <div className="card-foot">
           <div>
-            <div className="price">{canBuy ? b.price : "Prix à fixer"}</div>
-            <div className="stock-lbl">{canBuy ? (b.hasFile?"📥 Téléchargement immédiat":"⏳ Bientôt dispo") : "⏳ Prix en attente"}</div>
+            <div className="price">{effectivePrice}</div>
+            <div className="stock-lbl">{b.hasFile?"📥 Téléchargement immédiat":"⏳ Bientôt dispo"}</div>
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:".3rem"}}>
             <button
@@ -619,7 +639,7 @@ const BookCard = memo(function BookCard({ b, admin, wished, onAddCart, onToggleW
               style={!canBuy ? { opacity: 0.55, cursor: "not-allowed" } : undefined}
               onClick={e=>{e.stopPropagation();onAddCart(b);}}
             >
-              {canBuy ? "Acheter" : "Prix à fixer"}
+              {canBuy ? "Acheter" : "Indisponible"}
             </button>
             {admin&&(
               <div style={{display:"flex",gap:".25rem"}}>
@@ -850,11 +870,15 @@ export default function App() {
   }, []);
 
   const addCart = useCallback(b => {
-    if (!(Number(b?.num) > 0)) {
-      toast$("Prix en attente de configuration", "er");
-      return;
-    }
-    setCart(p=>{const ex=p.find(i=>i.fbKey===b.fbKey); return ex?p.map(i=>i.fbKey===b.fbKey?{...i,qty:i.qty+1}:i):[...p,{...b,qty:1}];});
+    const hasManualNum = Number(b?.num) > 0;
+    const effectiveNum = hasManualNum ? Number(b.num) : autoPriceFromPageCount(b?.pageCount);
+    if (!(effectiveNum > 0)) { toast$("Prix indisponible", "er"); return; }
+    const pricedBook = {
+      ...b,
+      num: effectiveNum,
+      price: hasManualNum ? (b.price || formatPriceLabel(effectiveNum)) : formatPriceLabel(effectiveNum),
+    };
+    setCart(p=>{const ex=p.find(i=>i.fbKey===pricedBook.fbKey); return ex?p.map(i=>i.fbKey===pricedBook.fbKey?{...i,qty:i.qty+1}:i):[...p,{...pricedBook,qty:1}];});
     toast$(`"${b.title}" ajouté ✓`);
   }, [toast$]);
 
@@ -1032,10 +1056,21 @@ export default function App() {
       setAiLoading(true); toast$("Analyse PDF + internet en cours...");
       const [cover,pages,analysis]=await Promise.all([extractPDFCover(b64),extractPDFPageCount(b64),analyzeBookPDF(b64,file.name)]);
       const finalPages = pages || analysis?.pageCount || null;
+      const autoNum = autoPriceFromPageCount(finalPages);
       if (cover) setExtractedCover(cover);
       if (finalPages) setPageCount(finalPages);
       if (analysis.title||analysis.author||analysis.desc||analysis.cat) {
-        setForm(p=>({...p,title:analysis.title||p.title,author:analysis.author||p.author,cat:CATS.includes(analysis.cat)?analysis.cat:(p.cat||"Autre"),desc:analysis.desc||p.desc}));
+        setForm(p=>({
+          ...p,
+          title:analysis.title||p.title,
+          author:analysis.author||p.author,
+          cat:CATS.includes(analysis.cat)?analysis.cat:(p.cat||"Autre"),
+          desc:analysis.desc||p.desc,
+          num:String(autoNum),
+          price:formatPriceLabel(autoNum),
+        }));
+      } else {
+        setForm(p=>({...p,num:String(autoNum),price:formatPriceLabel(autoNum)}));
       }
       setAiLoading(false); toast$(`Analyse terminee${finalPages ? ` - ${finalPages} pages` : ""}`);
     }
@@ -1104,6 +1139,7 @@ export default function App() {
         ]);
 
         const finalPages = pages || analysis?.pageCount || null;
+        const autoNum = autoPriceFromPageCount(finalPages);
         const title = sanitize(analysis?.title || titleFromFilename(item.name) || `Livre ${Date.now()}`);
         const author = sanitize(analysis?.author || "Auteur a confirmer");
         const cat = CATS.includes(analysis?.cat) ? analysis.cat : "Autre";
@@ -1125,8 +1161,8 @@ export default function App() {
           author,
           cat,
           emoji: "📚",
-          price: "Prix à fixer",
-          num: 0,
+          price: formatPriceLabel(autoNum),
+          num: autoNum,
           desc,
           stock: 99,
           hasFile: true,
@@ -1168,7 +1204,7 @@ export default function App() {
     setAiLoading(false);
     setBulkImporting(false);
 
-    if (ok > 0) toast$(`${ok} livre(s) importe(s). Fixez maintenant les prix.`);
+    if (ok > 0) toast$(`${ok} livre(s) importe(s). Prix automatique applique.`);
     if (fail > 0) toast$(`${fail} echec(s) pendant l'import`, "er");
     if (fail === 0) {
       resetBulkImport();
@@ -1180,13 +1216,15 @@ const saveBook = async () => {
   const errs = {};
   if (!form.title.trim()) errs.title = "Titre requis";
   if (!form.author.trim()) errs.author = "Auteur requis";
-  if (!form.num || isNaN(form.num)) errs.num = "Prix requis";
+  if (form.num && (isNaN(form.num) || Number(form.num) <= 0)) errs.num = "Prix invalide";
   if (Object.keys(errs).length) { setFormFieldErrs(errs); return; }
 
-  // Calcul sécurisé du prix
-  const computedPrice = form.price 
-    ? sanitize(form.price) 
-    : Number(form.num || 0).toLocaleString("fr-FR") + " GNF";
+  // Calcul sécurisé du prix (manuel si saisi, sinon automatique via pages)
+  const manualNum = Number(form.num);
+  const hasManualNum = Number.isFinite(manualNum) && manualNum > 0;
+  const inferredPages = pageCount || editB?.pageCount || 0;
+  const finalNum = hasManualNum ? manualNum : autoPriceFromPageCount(inferredPages);
+  const computedPrice = formatPriceLabel(finalNum);
 
   // Préparation de bookData
   const bookData = {
@@ -1195,7 +1233,7 @@ const saveBook = async () => {
     cat: form.cat || "Autre",
     emoji: form.emoji || "📚",
     price: computedPrice,
-    num: Number(form.num) || 0,
+    num: finalNum,
     desc: sanitize(form.desc || ""),
     stock: Number(form.stock) || 99,
     hasFile: uploadedFile ? true : (editB?.hasFile || false),
@@ -1617,15 +1655,13 @@ const confirmDel = async () => {
                   <div className="detail-title">{detailBook.title}</div>
                   <div className="detail-author">{detailBook.author}</div>
                   {detailBook.pageCount&&<div className="detail-pages"><span>📄</span><span>{detailBook.pageCount} pages</span></div>}
-                  <div className="detail-price">{Number(detailBook.num)>0 ? detailBook.price : "Prix à fixer"}</div>
+                  <div className="detail-price">{Number(detailBook.num)>0 ? detailBook.price : formatPriceLabel(autoPriceFromPageCount(detailBook.pageCount))}</div>
                   <div style={{display:"flex",gap:".5rem",flexWrap:"wrap"}}>
                     <button
                       className="btn btn-gold"
-                      disabled={Number(detailBook.num)<=0}
-                      style={Number(detailBook.num)<=0 ? {opacity:.6,cursor:"not-allowed"} : undefined}
                       onClick={()=>{addCart(detailBook);setModal(null);}}
                     >
-                      {Number(detailBook.num)>0 ? "🛒 Acheter" : "⏳ Prix à fixer"}
+                      🛒 Acheter
                     </button>
                     <button className="btn btn-ghost" onClick={()=>toggleWish(detailBook.fbKey)}>{wishlist.includes(detailBook.fbKey)?"❤️ Favori":"🤍 Favoris"}</button>
                   </div>
@@ -1648,7 +1684,7 @@ const confirmDel = async () => {
                   <p>Glissez ou cliquez<br/><strong>Pack de 20 ou 50 PDF</strong></p>
                 </div>
                 <p style={{fontSize:".72rem",color:"var(--muted)",marginTop:".4rem"}}>
-                  Chaque livre est cree automatiquement avec metadonnees + couverture. Le prix sera mis sur <strong style={{color:"var(--gold)"}}>Prix à fixer</strong>.
+                  Chaque livre est cree automatiquement avec metadonnees + couverture. Le prix est calcule auto: base 5 000 GNF puis +5 000 GNF par tranche de 150 pages (max 25 000 GNF).
                 </p>
               </div>
 
@@ -1717,7 +1753,7 @@ const confirmDel = async () => {
                 <div className="fg"><label className="fl">Emoji</label><select className="fs" name="emoji" value={form.emoji} onChange={chForm}>{EMOJIS.map(e=><option key={e} value={e}>{e}</option>)}</select></div>
               </div>
               <div className="fr">
-                <div className="fg"><label className="fl">Prix (GNF) *</label><input className={`fi ${formFieldErrs.num?"err-field":""}`} name="num" type="number" value={form.num} onChange={chForm} placeholder="ex: 35000"/>{formFieldErrs.num&&<div className="field-err">{formFieldErrs.num}</div>}</div>
+                <div className="fg"><label className="fl">Prix (GNF) (auto si vide)</label><input className={`fi ${formFieldErrs.num?"err-field":""}`} name="num" type="number" value={form.num} onChange={chForm} placeholder="ex: 35000"/>{formFieldErrs.num&&<div className="field-err">{formFieldErrs.num}</div>}</div>
                 <div className="fg"><label className="fl">Stock</label><input className="fi" name="stock" type="number" min="0" value={form.stock} onChange={chForm}/></div>
               </div>
               <div className="fg"><label className="fl">Description</label><textarea className="ft" name="desc" value={form.desc} onChange={chForm} placeholder="Résumé…"/></div>
