@@ -21,7 +21,7 @@ export default function AdminPanel({
   orderSearch, setOrderSearch,
   pendingCount, statsData,
   filteredAdminBooks, filteredOrders,
-  onAddBook, onSetOrderStatus,
+  onAddBook, onOpenBulkImport, onSetOrderStatus,
   onAddPromo, onTogglePromo, onDeletePromo,
   promoForm, setPromoForm,
   onClose,
@@ -90,6 +90,7 @@ export default function AdminPanel({
       {adminTab==="books"&&<>
         <div style={{display:"flex",gap:".7rem",marginBottom:"1.2rem",alignItems:"center",flexWrap:"wrap"}}>
           <button className="btn btn-gold" onClick={onAddBook}>+ Nouveau livre</button>
+          <button className="btn btn-ghost" onClick={onOpenBulkImport}>📦 Pack PDF (20/50)</button>
           <input className="search-input" style={{flex:1,minWidth:200,marginBottom:0}} placeholder="Rechercher…" value={adminSearch} onChange={e=>setAdminSearch(e.target.value)}/>
         </div>
         {filteredAdminBooks.length===0

@@ -229,6 +229,15 @@ function foldText(value) {
 function cleanLine(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
 }
+
+function titleFromFilename(fileName = "") {
+  return cleanLine(
+    String(fileName || "")
+      .replace(/\.[^.]+$/, "")
+      .replace(/[_-]+/g, " ")
+      .replace(/\d{2,}/g, " ")
+  );
+}
 async function extractPDFCover(b64) {
   try {
     const pdfjs = await loadPDFJS();
@@ -516,11 +525,7 @@ async function analyzeBookPDF(b64, fileName = "") {
     const hints = parsePdfCoverHints(firstPageText, fileName);
     const online = await searchBookMetadata(hints.title, hints.author);
 
-    const title = cleanLine(
-      online?.title ||
-      hints.title ||
-      String(fileName || "").replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ")
-    );
+    const title = cleanLine(online?.title || hints.title || titleFromFilename(fileName));
     const author = cleanLine(online?.author || hints.author || "");
     const cat = detectBookCategory({
       title,
@@ -583,6 +588,7 @@ const SkeletonCard = () => (
 // BOOK CARD — mémoïsée : ne se re-render que si ses props changent
 // ─────────────────────────────────────────────────────────────
 const BookCard = memo(function BookCard({ b, admin, wished, onAddCart, onToggleWish, onOpenDetail, onEdit, onDelete, onToggleFeatured }) {
+  const canBuy = Number(b?.num) > 0;
   return (
     <div className="card" onClick={()=>onOpenDetail(b)}>
       <div className="card-cover">
@@ -603,11 +609,18 @@ const BookCard = memo(function BookCard({ b, admin, wished, onAddCart, onToggleW
         {b.pageCount&&<div className="pages-info"><span>📄</span><span>{b.pageCount} pages</span></div>}
         <div className="card-foot">
           <div>
-            <div className="price">{b.price}</div>
-            <div className="stock-lbl">{b.hasFile?"📥 Téléchargement immédiat":"⏳ Bientôt dispo"}</div>
+            <div className="price">{canBuy ? b.price : "Prix à fixer"}</div>
+            <div className="stock-lbl">{canBuy ? (b.hasFile?"📥 Téléchargement immédiat":"⏳ Bientôt dispo") : "⏳ Prix en attente"}</div>
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:".3rem"}}>
-            <button className="add-btn" onClick={e=>{e.stopPropagation();onAddCart(b);}}>Acheter</button>
+            <button
+              className="add-btn"
+              disabled={!canBuy}
+              style={!canBuy ? { opacity: 0.55, cursor: "not-allowed" } : undefined}
+              onClick={e=>{e.stopPropagation();onAddCart(b);}}
+            >
+              {canBuy ? "Acheter" : "Prix à fixer"}
+            </button>
             {admin&&(
               <div style={{display:"flex",gap:".25rem"}}>
                 <button className="btn btn-ghost btn-sm" onClick={e=>{e.stopPropagation();onEdit(b);}}>✏️</button>
@@ -668,6 +681,10 @@ export default function App() {
   const [uploadedFile,   setUploadedFile]   = useState(null);
   const [extractedCover, setExtractedCover] = useState(null);
   const [pageCount,      setPageCount]      = useState(null);
+  const [bulkFiles,      setBulkFiles]      = useState([]);
+  const [bulkImporting,  setBulkImporting]  = useState(false);
+  const [bulkProgress,   setBulkProgress]   = useState({ done: 0, total: 0, ok: 0, fail: 0, current: "" });
+  const [bulkErrors,     setBulkErrors]     = useState([]);
 
   // ── Checkout ──
   const [checkF,       setCheckF]       = useState({name:"",phone:"",txId:"",pin:""});
@@ -833,6 +850,10 @@ export default function App() {
   }, []);
 
   const addCart = useCallback(b => {
+    if (!(Number(b?.num) > 0)) {
+      toast$("Prix en attente de configuration", "er");
+      return;
+    }
     setCart(p=>{const ex=p.find(i=>i.fbKey===b.fbKey); return ex?p.map(i=>i.fbKey===b.fbKey?{...i,qty:i.qty+1}:i):[...p,{...b,qty:1}];});
     toast$(`"${b.title}" ajouté ✓`);
   }, [toast$]);
@@ -888,6 +909,7 @@ export default function App() {
 
   const doCheckout = async () => {
     if (cart.length === 0) { toast$("Panier vide", "er"); return; }
+    if (cart.some(i => !(Number(i?.num) > 0))) { toast$("Certains livres n'ont pas encore de prix", "er"); return; }
     if (!canOrder()) { toast$("Trop de tentatives. Réessayez dans 10 minutes.", "er"); return; }
 
     const errs = {};
@@ -962,7 +984,33 @@ export default function App() {
   const doLogout = () => { setIsAdmin(false); clearSession(); setView("home"); toast$("Déconnecté","er"); };
 
   // ─── Formulaire livre ─────────────────────────────────────────────────────
-  const openAdd = () => { setForm(emptyF); setUploadedFile(null); setExtractedCover(null); setPageCount(null); setFormErr(""); setFormFieldErrs({}); setModal("add"); };
+  const resetBulkImport = () => {
+    setBulkFiles([]);
+    setBulkErrors([]);
+    setBulkProgress({ done: 0, total: 0, ok: 0, fail: 0, current: "" });
+  };
+
+  const openAdd = () => {
+    setForm(emptyF);
+    setUploadedFile(null);
+    setExtractedCover(null);
+    setPageCount(null);
+    setFormErr("");
+    setFormFieldErrs({});
+    resetBulkImport();
+    setModal("add");
+  };
+
+  const openBulkImport = () => {
+    setForm(emptyF);
+    setUploadedFile(null);
+    setExtractedCover(null);
+    setPageCount(null);
+    setFormErr("");
+    setFormFieldErrs({});
+    resetBulkImport();
+    setModal("bulk");
+  };
 
   const chForm = e => {
     const {name:n,value:v}=e.target;
@@ -990,6 +1038,141 @@ export default function App() {
         setForm(p=>({...p,title:analysis.title||p.title,author:analysis.author||p.author,cat:CATS.includes(analysis.cat)?analysis.cat:(p.cat||"Autre"),desc:analysis.desc||p.desc}));
       }
       setAiLoading(false); toast$(`Analyse terminee${finalPages ? ` - ${finalPages} pages` : ""}`);
+    }
+  };
+
+  const handleBulkFilesChange = e => {
+    const incoming = Array.from(e.target.files || []);
+    if (!incoming.length) return;
+
+    const pdfs = incoming.filter(f => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf"));
+    if (!pdfs.length) {
+      toast$("Ajoutez des fichiers PDF uniquement", "er");
+      return;
+    }
+
+    if (pdfs.length !== incoming.length) {
+      toast$("Certains fichiers non-PDF ont ete ignores", "er");
+    }
+
+    const maxBytes = 9 * 1024 * 1024;
+    const sizeOk = pdfs.filter(f => f.size <= maxBytes);
+    if (sizeOk.length !== pdfs.length) {
+      toast$(`${pdfs.length - sizeOk.length} PDF ignores (> 9 Mo)`, "er");
+    }
+
+    const limited = sizeOk.slice(0, 50);
+    if (sizeOk.length > 50) {
+      toast$("Import limite a 50 PDF par pack", "er");
+    }
+
+    const ready = limited.map(file => ({
+      file,
+      name: file.name,
+      sizeLabel: `${(file.size / 1024).toFixed(0)} Ko`,
+    }));
+
+    setBulkFiles(ready);
+    setBulkErrors([]);
+    setBulkProgress({ done: 0, total: ready.length, ok: 0, fail: 0, current: "" });
+    if (ready.length) toast$(`${ready.length} PDF prets pour import`);
+    e.target.value = "";
+  };
+
+  const runBulkImport = async () => {
+    if (!bulkFiles.length) { toast$("Ajoutez d'abord un pack PDF", "er"); return; }
+    if (bulkImporting) return;
+
+    setBulkImporting(true);
+    setAiLoading(true);
+    setBulkErrors([]);
+
+    const total = bulkFiles.length;
+    let ok = 0;
+    let fail = 0;
+
+    for (let i = 0; i < bulkFiles.length; i++) {
+      const item = bulkFiles[i];
+      setBulkProgress({ done: i, total, ok, fail, current: item.name });
+
+      try {
+        const b64 = await readFileAsBase64(item.file);
+        const [cover, pages, analysis] = await Promise.all([
+          extractPDFCover(b64),
+          extractPDFPageCount(b64),
+          analyzeBookPDF(b64, item.name),
+        ]);
+
+        const finalPages = pages || analysis?.pageCount || null;
+        const title = sanitize(analysis?.title || titleFromFilename(item.name) || `Livre ${Date.now()}`);
+        const author = sanitize(analysis?.author || "Auteur a confirmer");
+        const cat = CATS.includes(analysis?.cat) ? analysis.cat : "Autre";
+        const desc = sanitize(
+          analysis?.desc ||
+          buildBookDescription({
+            title,
+            author,
+            cat,
+            firstPageText: "",
+            onlineDescription: "",
+            onlineCategories: [],
+            pageCount: finalPages || null,
+          })
+        );
+
+        const bookData = {
+          title,
+          author,
+          cat,
+          emoji: "📚",
+          price: "Prix à fixer",
+          num: 0,
+          desc,
+          stock: 99,
+          hasFile: true,
+          coverImage: cover || null,
+          pageCount: finalPages || null,
+          featured: false,
+          createdAt: Date.now() + i,
+        };
+
+        const res = await api.post("books", bookData);
+        const bookKey = res?.name;
+        if (!bookKey) throw new Error("creation impossible");
+
+        await api.put(`book-files/${bookKey}`, {
+          fileData: b64,
+          fileName: item.name,
+          fileType: item.file?.type || "application/pdf",
+        });
+
+        await api.put(`${CATALOG_PATH}/${bookKey}`, normalizeBook({ ...bookData, fbKey: bookKey }, bookKey));
+        ok += 1;
+      } catch (err) {
+        fail += 1;
+        setBulkErrors(prev => [...prev, `${item.name} - ${err?.message || "erreur inconnue"}`]);
+      }
+
+      setBulkProgress({ done: i + 1, total, ok, fail, current: item.name });
+    }
+
+    if (ok > 0) {
+      const data = await api.get(CATALOG_PATH);
+      if (data) {
+        const fresh = mapCatalogData(data);
+        setBooks(fresh);
+        saveBooksCache(fresh);
+      }
+    }
+
+    setAiLoading(false);
+    setBulkImporting(false);
+
+    if (ok > 0) toast$(`${ok} livre(s) importe(s). Fixez maintenant les prix.`);
+    if (fail > 0) toast$(`${fail} echec(s) pendant l'import`, "er");
+    if (fail === 0) {
+      resetBulkImport();
+      setModal(null);
     }
   };
 // ─── Sauvegarde livre ─────────────────────────────────────────────────────
@@ -1280,6 +1463,7 @@ const confirmDel = async () => {
             filteredAdminBooks={filteredAdminBooks}
             filteredOrders={filteredOrders}
             onAddBook={openAdd}
+            onOpenBulkImport={openBulkImport}
             onSetOrderStatus={setOrderStatus}
             onAddPromo={addPromoCode}
             onTogglePromo={togglePromo}
@@ -1406,7 +1590,7 @@ const confirmDel = async () => {
 
       {/* ══ MODALS ══ */}
       {modal&&(
-        <div className="overlay" onClick={e=>{if(e.target===e.currentTarget)setModal(null);}}>
+        <div className="overlay" onClick={e=>{if(e.target===e.currentTarget && !(modal==="bulk"&&bulkImporting))setModal(null);}}>
           {modal==="login"&&(
             <div className="modal" style={{maxWidth:340}}>
               <button className="mc" onClick={()=>setModal(null)}>✕</button>
@@ -1433,15 +1617,77 @@ const confirmDel = async () => {
                   <div className="detail-title">{detailBook.title}</div>
                   <div className="detail-author">{detailBook.author}</div>
                   {detailBook.pageCount&&<div className="detail-pages"><span>📄</span><span>{detailBook.pageCount} pages</span></div>}
-                  <div className="detail-price">{detailBook.price}</div>
+                  <div className="detail-price">{Number(detailBook.num)>0 ? detailBook.price : "Prix à fixer"}</div>
                   <div style={{display:"flex",gap:".5rem",flexWrap:"wrap"}}>
-                    <button className="btn btn-gold" onClick={()=>{addCart(detailBook);setModal(null);}}>🛒 Acheter</button>
+                    <button
+                      className="btn btn-gold"
+                      disabled={Number(detailBook.num)<=0}
+                      style={Number(detailBook.num)<=0 ? {opacity:.6,cursor:"not-allowed"} : undefined}
+                      onClick={()=>{addCart(detailBook);setModal(null);}}
+                    >
+                      {Number(detailBook.num)>0 ? "🛒 Acheter" : "⏳ Prix à fixer"}
+                    </button>
                     <button className="btn btn-ghost" onClick={()=>toggleWish(detailBook.fbKey)}>{wishlist.includes(detailBook.fbKey)?"❤️ Favori":"🤍 Favoris"}</button>
                   </div>
                 </div>
               </div>
               {detailBook.desc&&<div className="detail-desc"><div style={{color:"var(--gold)",fontSize:".7rem",textTransform:"uppercase",letterSpacing:".1em",marginBottom:".5rem"}}>Description</div>{detailBook.desc}</div>}
               <div style={{marginTop:".9rem",fontSize:".75rem",color:"var(--muted)"}}>{detailBook.hasFile?<span style={{color:"var(--green)"}}>✅ PDF disponible — téléchargement immédiat après confirmation</span>:<span>⏳ Fichier en cours d'ajout</span>}</div>
+            </div>
+          )}
+
+          {modal==="bulk"&&(
+            <div className="modal" style={{maxWidth:640}}>
+              <button className="mc" onClick={()=>{ if (!bulkImporting) setModal(null); }}>✖</button>
+              <h2>📦 Import pack PDF (20/50)</h2>
+              <div className="fg">
+                <label className="fl">PDF (max 50, 9 Mo chacun)</label>
+                <div className="upload-zone">
+                  <input type="file" accept=".pdf,application/pdf" multiple onChange={handleBulkFilesChange} disabled={bulkImporting}/>
+                  <div className="uico">📦</div>
+                  <p>Glissez ou cliquez<br/><strong>Pack de 20 ou 50 PDF</strong></p>
+                </div>
+                <p style={{fontSize:".72rem",color:"var(--muted)",marginTop:".4rem"}}>
+                  Chaque livre est cree automatiquement avec metadonnees + couverture. Le prix sera mis sur <strong style={{color:"var(--gold)"}}>Prix à fixer</strong>.
+                </p>
+              </div>
+
+              {bulkFiles.length>0&&(
+                <div className="ai-analysis-box" style={{marginBottom:".9rem"}}>
+                  <div style={{fontSize:".74rem",color:"var(--gold)",marginBottom:".4rem"}}>{bulkFiles.length} fichier(s) pret(s)</div>
+                  {bulkFiles.slice(0,8).map(f=>(
+                    <div key={`${f.name}-${f.sizeLabel}`} style={{display:"flex",justifyContent:"space-between",fontSize:".74rem",marginBottom:".22rem"}}>
+                      <span style={{color:"var(--text)"}}>{f.name}</span>
+                      <span style={{color:"var(--muted)"}}>{f.sizeLabel}</span>
+                    </div>
+                  ))}
+                  {bulkFiles.length>8&&<div style={{fontSize:".72rem",color:"var(--muted)"}}>...et {bulkFiles.length-8} autre(s)</div>}
+                </div>
+              )}
+
+              {(bulkImporting||bulkProgress.total>0)&&(
+                <div className="ai-row" style={{marginBottom:".8rem",display:"block"}}>
+                  <div><span className="spin">⚙️</span> Import en cours...</div>
+                  <div style={{fontSize:".75rem",marginTop:".2rem",color:"var(--muted)"}}>
+                    {bulkProgress.done}/{bulkProgress.total} traites — OK: {bulkProgress.ok} • Erreurs: {bulkProgress.fail}
+                  </div>
+                  {bulkProgress.current&&<div style={{fontSize:".72rem",marginTop:".2rem",color:"var(--gold)"}}>Fichier: {bulkProgress.current}</div>}
+                </div>
+              )}
+
+              {bulkErrors.length>0&&(
+                <div className="err" style={{maxHeight:120,overflow:"auto"}}>
+                  {bulkErrors.slice(0,8).map((x,i)=><div key={`${i}-${x}`}>{x}</div>)}
+                  {bulkErrors.length>8&&<div>...{bulkErrors.length-8} autres erreurs</div>}
+                </div>
+              )}
+
+              <div className="fa">
+                <button className="btn btn-ghost" onClick={()=>setModal(null)} disabled={bulkImporting}>Fermer</button>
+                <button className="btn btn-gold" onClick={runBulkImport} disabled={bulkImporting||bulkFiles.length===0}>
+                  {bulkImporting?"⏳ Import...":"Lancer le pack"}
+                </button>
+              </div>
             </div>
           )}
 
