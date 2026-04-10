@@ -199,7 +199,8 @@ const fmtGNF     = n   => (n||0).toLocaleString("fr-FR")+" GNF";
 const fmtDate    = ts  => ts ? new Date(ts).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}) : "";
 const sanitize   = str => String(str||"").replace(/[<>]/g,"").trim();
 const validPhone = p   => /^\d{9,15}$/.test(p.replace(/[\s\-+()]/g,""));
-const validTx    = t   => t.trim().length >= 4;
+// ✅ MODIF 1 — accepte exactement 4 chiffres
+const validTx    = t   => /^\d{4}$/.test(t.trim());
 
 function applySort(books, sort) {
   const b = [...books];
@@ -583,7 +584,7 @@ async function aiCat(title,author) {
 }
 async function sendTelegramNotif(order) {
   if (!TELEGRAM_BOT_TOKEN||TELEGRAM_BOT_TOKEN==="VOTRE_BOT_TOKEN") return;
-  const msg=[`🛒 *Nouvelle commande — Librairie YO*`,``,`👤 ${order.name}`,`📞 \`${order.phone}\``,`💰 *${fmtGNF(order.total)}*`,`🔖 TX OM : \`${order.txId}\``,``,...(order.promoCode?[`🏷️ Code : ${order.promoCode} (-${fmtGNF(order.discount)})`]:[]),`📚 *Livres :*`,...(order.items||[]).map(i=>`  • ${i.title} ×${i.qty}`)].join("\n");
+  const msg=[`🛒 *Nouvelle commande — Librairie YO*`,``,`👤 ${order.name}`,`📞 \`${order.phone}\``,`💰 *${fmtGNF(order.total)}*`,`🔖 4 derniers chiffres OM : \`${order.txId}\``,``,...(order.promoCode?[`🏷️ Code : ${order.promoCode} (-${fmtGNF(order.discount)})`]:[]),`📚 *Livres :*`,...(order.items||[]).map(i=>`  • ${i.title} ×${i.qty}`)].join("\n");
   try { await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:TELEGRAM_CHAT_ID,text:msg,parse_mode:"Markdown"})}); } catch {}
 }
 
@@ -791,8 +792,7 @@ export default function App() {
   useEffect(() => { setVisibleCount(INITIAL_VISIBLE_BOOKS); }, [search, activeCat, sort]);
 
   // ─────────────────────────────────────────────────────────────
-  // VALEURS MÉMOÏSÉES — recalculées seulement quand leurs
-  // dépendances changent (pas à chaque frappe au clavier)
+  // VALEURS MÉMOÏSÉES
   // ─────────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -853,8 +853,7 @@ export default function App() {
   }, [books, adminSearch]);
 
   // ─────────────────────────────────────────────────────────────
-  // CALLBACKS STABLES — useCallback évite les re-renders des
-  // BookCard mémoïsées quand App se re-render
+  // CALLBACKS STABLES
   // ─────────────────────────────────────────────────────────────
   const toast$ = useCallback((msg, type="ok") => {
     setToast({msg,type});
@@ -939,11 +938,11 @@ export default function App() {
     const errs = {};
     const cleanName = sanitize(checkF.name);
     const cleanPhone = checkF.phone.trim().replace(/\s+/g, "");
-    const cleanTxId = sanitize(checkF.txId);
+    const cleanTxId = checkF.txId.trim();
     const cleanPin = checkF.pin.replace(/\D/g, "");
     if (!cleanName) errs.name = "Nom requis";
     if (!validPhone(cleanPhone)) errs.phone = "Téléphone invalide";
-    if (!validTx(cleanTxId)) errs.txId = "N° de confirmation invalide";
+    if (!validTx(cleanTxId)) errs.txId = "4 chiffres requis";
     if (!/^\d{4}$/.test(cleanPin)) errs.pin = "PIN à 4 chiffres";
     if (Object.keys(errs).length) { setCheckErrs(errs); toast$(Object.values(errs)[0], "er"); return; }
 
@@ -1219,14 +1218,12 @@ const saveBook = async () => {
   if (form.num && (isNaN(form.num) || Number(form.num) <= 0)) errs.num = "Prix invalide";
   if (Object.keys(errs).length) { setFormFieldErrs(errs); return; }
 
-  // Calcul sécurisé du prix (manuel si saisi, sinon automatique via pages)
   const manualNum = Number(form.num);
   const hasManualNum = Number.isFinite(manualNum) && manualNum > 0;
   const inferredPages = pageCount || editB?.pageCount || 0;
   const finalNum = hasManualNum ? manualNum : autoPriceFromPageCount(inferredPages);
   const computedPrice = formatPriceLabel(finalNum);
 
-  // Préparation de bookData
   const bookData = {
     title: sanitize(form.title),
     author: sanitize(form.author),
@@ -1364,11 +1361,11 @@ const confirmDel = async () => {
   };
 
   const copyOrderSummary = order => {
-    const txt=[`📦 Commande Librairie YO`,``,`👤 ${order.name}`,`📞 ${order.phone}`,`💰 ${fmtGNF(order.total)}`,`🔖 TX: ${order.txId}`,`📌 PIN: ${order.pin}`,``,...(order.items||[]).map(i=>`• ${i.title} ×${i.qty}`)].join("\n");
+    const txt=[`📦 Commande Librairie YO`,``,`👤 ${order.name}`,`📞 ${order.phone}`,`💰 ${fmtGNF(order.total)}`,`🔖 TX (4 derniers chiffres): ${order.txId}`,`📌 PIN: ${order.pin}`,``,...(order.items||[]).map(i=>`• ${i.title} ×${i.qty}`)].join("\n");
     navigator.clipboard.writeText(txt).catch(()=>{}); toast$("Résumé copié 📋");
   };
 
-  // ─── BookCard avec callbacks stables (pour React.memo) ────────────────────
+  // ─── BookCard avec callbacks stables ──────────────────────────────────────
   const renderBookCard = useCallback((b, admin=false) => (
     <BookCard
       key={b.fbKey}
@@ -1479,7 +1476,7 @@ const confirmDel = async () => {
         </div>
       </>}
 
-      {/* ══ ADMIN — chargé uniquement si admin connecté ══ */}
+      {/* ══ ADMIN ══ */}
       {view==="admin"&&isAdmin&&(
         <Suspense fallback={
           <div style={{textAlign:"center",padding:"4rem",color:"var(--muted)"}}>
@@ -1524,7 +1521,7 @@ const confirmDel = async () => {
             <div>👤 <strong>{pendingOrder.name}</strong></div>
             <div>📞 <strong>{pendingOrder.phone}</strong></div>
             <div>💰 <strong>{fmtGNF(pendingOrder.total)}</strong>{pendingOrder.discount>0&&<span style={{color:"var(--green)",fontSize:".8rem",marginLeft:".5rem"}}>(-{fmtGNF(pendingOrder.discount)})</span>}</div>
-            <div>🔖 TX OM : <strong style={{fontFamily:"monospace"}}>{pendingOrder.txId}</strong></div>
+            <div>🔖 Confirmation OM : <strong style={{fontFamily:"monospace"}}>****{pendingOrder.txId}</strong></div>
           </div>
           <p style={{fontSize:".82rem",marginBottom:".5rem"}}>Gardez votre <strong style={{color:"var(--cream)"}}>PIN</strong> pour accéder à vos livres :</p>
           <div className="pin-highlight">📌 PIN : {pendingOrder.pin}</div>
@@ -1594,7 +1591,7 @@ const confirmDel = async () => {
                 </div>
               )}
               {order.status==="rejected"&&<div style={{fontSize:".77rem",color:"#f08080"}}>❌ Commande rejetée.{" "}<a href={`https://wa.me/${WA_NUMBER}`} style={{color:"var(--gold)"}} target="_blank" rel="noreferrer">Contacter le support →</a></div>}
-              {order.status==="pending"&&<div style={{fontSize:".77rem",color:"var(--orange)",lineHeight:1.5}}>⏳ Paiement en cours de vérification — revenez dans quelques heures.<br/><span style={{fontSize:".7rem",color:"var(--muted)"}}>TX : {order.txId}</span></div>}
+              {order.status==="pending"&&<div style={{fontSize:".77rem",color:"var(--orange)",lineHeight:1.5}}>⏳ Paiement en cours de vérification — revenez dans quelques heures.<br/><span style={{fontSize:".7rem",color:"var(--muted)"}}>TX (4 derniers chiffres) : {order.txId}</span></div>}
             </div>
           ))}
           <button className="btn btn-ghost" style={{width:"100%",marginTop:".8rem"}} onClick={()=>setView("home")}>← Retour au catalogue</button>
@@ -1657,12 +1654,7 @@ const confirmDel = async () => {
                   {detailBook.pageCount&&<div className="detail-pages"><span>📄</span><span>{detailBook.pageCount} pages</span></div>}
                   <div className="detail-price">{Number(detailBook.num)>0 ? detailBook.price : formatPriceLabel(autoPriceFromPageCount(detailBook.pageCount))}</div>
                   <div style={{display:"flex",gap:".5rem",flexWrap:"wrap"}}>
-                    <button
-                      className="btn btn-gold"
-                      onClick={()=>{addCart(detailBook);setModal(null);}}
-                    >
-                      🛒 Acheter
-                    </button>
+                    <button className="btn btn-gold" onClick={()=>{addCart(detailBook);setModal(null);}}>🛒 Acheter</button>
                     <button className="btn btn-ghost" onClick={()=>toggleWish(detailBook.fbKey)}>{wishlist.includes(detailBook.fbKey)?"❤️ Favori":"🤍 Favoris"}</button>
                   </div>
                 </div>
@@ -1792,18 +1784,69 @@ const confirmDel = async () => {
               ):(
                 <div className="promo-applied"><span>🏷️ Code "{appliedPromo.code}" appliqué</span><button style={{background:"none",border:"none",color:"var(--muted)",cursor:"pointer",fontSize:".85rem"}} onClick={()=>{setAppliedPromo(null);setPromoInput("");}}>✕</button></div>
               )}
-              <div className="om-box">
-                <span style={{fontSize:"1.7rem"}}>🟠</span>
-                <div className="om-info"><div className="om-title">Orange Money</div><div className="om-num">{OM_NUMBER}</div><div className="om-sub">Envoyez {fmtGNF(discountedTotal)}</div></div>
-                <button className="om-copy" onClick={copyOM}>Copier</button>
-              </div>
-              {[["1","Ouvrez Orange Money"],["2","Transfert → "+OM_NUMBER],["3","Montant : "+fmtGNF(discountedTotal)],["4","Notez le code SMS de confirmation"],["5","Remplissez le formulaire ci-dessous"]].map(([n,t])=>(
+
+              {/* ✅ MODIF 2 — Bloc USSD Orange Money */}
+              {(()=>{
+                const ussd = `*144*1*1*613908784*${discountedTotal}*2#`;
+                return (
+                  <div className="om-box" style={{flexDirection:"column",gap:".55rem",alignItems:"flex-start"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:".8rem",width:"100%"}}>
+                      <span style={{fontSize:"1.7rem"}}>🟠</span>
+                      <div className="om-info" style={{flex:1}}>
+                        <div className="om-title">Orange Money — Paiement USSD</div>
+                        <div className="om-sub">Composez ce code depuis votre téléphone</div>
+                      </div>
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:".6rem",width:"100%"}}>
+                      <div style={{
+                        flex:1,fontFamily:"monospace",fontWeight:800,fontSize:".95rem",
+                        background:"rgba(0,0,0,.25)",borderRadius:7,padding:".5rem .9rem",
+                        color:"#fff",letterSpacing:".04em",wordBreak:"break-all"
+                      }}>
+                        {ussd}
+                      </div>
+                      <button className="om-copy" onClick={()=>{navigator.clipboard.writeText(ussd).catch(()=>{});toast$("Code USSD copié 📋");}}>
+                        Copier
+                      </button>
+                    </div>
+                    <div style={{fontSize:".7rem",color:"rgba(255,255,255,.75)"}}>
+                      Montant : <strong style={{color:"#fff"}}>{fmtGNF(discountedTotal)}</strong>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {[
+                ["1","Composez le code USSD ci-dessus sur votre téléphone"],
+                ["2","Validez et confirmez le paiement"],
+                ["3","Notez les 4 derniers chiffres du SMS de confirmation reçu"],
+                ["4","Remplissez le formulaire ci-dessous"],
+              ].map(([n,t])=>(
                 <div key={n} className="step"><span className="sn">{n}</span><span>{t}</span></div>
               ))}
+
               <hr className="div"/>
               <div className="fg"><label className="fl">Nom complet *</label><input className={`fi ${checkErrs.name?"err-field":""}`} value={checkF.name} onChange={e=>{setCheckF(p=>({...p,name:e.target.value}));setCheckErrs(p=>({...p,name:""}));}} placeholder="Votre nom"/>{checkErrs.name&&<div className="field-err">{checkErrs.name}</div>}</div>
               <div className="fg"><label className="fl">Téléphone *</label><input className={`fi ${checkErrs.phone?"err-field":""}`} value={checkF.phone} onChange={e=>{setCheckF(p=>({...p,phone:e.target.value}));setCheckErrs(p=>({...p,phone:""}));}} placeholder="+224 6XX XXX XXX"/>{checkErrs.phone&&<div className="field-err">{checkErrs.phone}</div>}</div>
-              <div className="fg"><label className="fl">N° confirmation Orange Money *</label><input className={`fi ${checkErrs.txId?"err-field":""}`} style={{fontFamily:"monospace",letterSpacing:".04em"}} value={checkF.txId} onChange={e=>{setCheckF(p=>({...p,txId:e.target.value}));setCheckErrs(p=>({...p,txId:""}));}} placeholder="ex: CI241203.1234.A12345"/><div style={{fontSize:".68rem",color:"var(--muted)",marginTop:".25rem"}}>📱 Code reçu par SMS après le transfert</div>{checkErrs.txId&&<div className="field-err">{checkErrs.txId}</div>}</div>
+
+              {/* ✅ MODIF 3 — 4 derniers chiffres uniquement */}
+              <div className="fg">
+                <label className="fl">4 derniers chiffres du SMS de confirmation *</label>
+                <input
+                  className={`fi pin-input ${checkErrs.txId?"err-field":""}`}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={checkF.txId}
+                  onChange={e=>{setCheckF(p=>({...p,txId:e.target.value.replace(/\D/g,"")}));setCheckErrs(p=>({...p,txId:""}));}}
+                  placeholder="ex: 4782"
+                />
+                <div style={{fontSize:".68rem",color:"var(--muted)",marginTop:".25rem"}}>
+                  📱 Les 4 derniers chiffres du SMS Orange Money reçu après paiement
+                </div>
+                {checkErrs.txId&&<div className="field-err">{checkErrs.txId}</div>}
+              </div>
+
               <div className="fg"><label className="fl">PIN secret à 4 chiffres * <span style={{color:"var(--gold)"}}>(notez-le !)</span></label><input className={`fi pin-input ${checkErrs.pin?"err-field":""}`} type="password" maxLength={4} value={checkF.pin} onChange={e=>{setCheckF(p=>({...p,pin:e.target.value.replace(/\D/g,"")}));setCheckErrs(p=>({...p,pin:""}));}} placeholder="••••"/><div style={{fontSize:".68rem",color:"var(--muted)",marginTop:".25rem"}}>🔒 Ce PIN + votre téléphone protègent l'accès à vos téléchargements</div>{checkErrs.pin&&<div className="field-err">{checkErrs.pin}</div>}</div>
               <div style={{background:"rgba(230,126,34,.08)",border:"1px solid rgba(230,126,34,.2)",borderRadius:7,padding:".65rem .9rem",fontSize:".74rem",color:"var(--muted)",marginBottom:".9rem"}}>⚠️ <strong style={{color:"var(--text)"}}>Accès après vérification</strong> — commande activée une fois le paiement confirmé (quelques heures).</div>
               <div className="fa"><button className="btn btn-ghost" onClick={()=>setModal(null)}>Retour</button><button className="btn btn-om" onClick={doCheckout}>📤 Soumettre la commande</button></div>
