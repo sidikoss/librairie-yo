@@ -3,7 +3,10 @@ import { firebaseApi } from "./firebaseApi";
 export async function fetchBooks() {
   const data = await firebaseApi.get("books", 9000);
 
-  if (!data || typeof data !== "object") return [];
+  if (!data || typeof data !== "object") {
+    console.log("FIREBASE EMPTY OR INVALID:", data);
+    return [];
+  }
 
   return Object.entries(data).map(([fbKey, value]) => ({
     ...value,
