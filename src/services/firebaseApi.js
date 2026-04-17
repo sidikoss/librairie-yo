@@ -19,8 +19,8 @@ async function request(path, options = {}, timeoutMs = 10000) {
     });
 
     if (!response.ok) {
-      return null;
-    }
+  console.log("FIREBASE ERROR:", response.status);
+}
 
     return await response.json();
   } catch {
