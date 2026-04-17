@@ -70,12 +70,11 @@ export function CatalogProvider({ children }) {
       ]);
 
       const salesMap = buildSalesByBookMap(rawOrders);
-      const normalizedBooks = rawBooks;
-  .filter((b) => b && (b.id || b.fbKey)) // 🔥 évite les livres cassés
+     const normalizedBooks = rawBooks
+  .filter((b) => b && (b.id || b.fbKey))
   .map((rawBook) =>
-    normalizeBook(rawBook, salesMap[rawBook.fbKey || rawBook.id] || 0),
+    normalizeBook(rawBook, salesMap[rawBook.fbKey || rawBook.id] || 0)
   );
-      );
 
       setBooks(normalizedBooks);
       setOrders(rawOrders);
