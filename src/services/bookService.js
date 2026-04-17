@@ -2,8 +2,13 @@ import { firebaseApi } from "./firebaseApi";
 
 export async function fetchBooks() {
   const data = await firebaseApi.get("books", 9000);
-  if (!data) return [];
-  return Object.entries(data).map(([fbKey, value]) => ({ ...value, fbKey }));
+
+  if (!data || typeof data !== "object") return [];
+
+  return Object.entries(data).map(([fbKey, value]) => ({
+    ...value,
+    fbKey,
+  }));
 }
 
 export async function createBook(payload) {
