@@ -1,4 +1,4 @@
-export function filterBooks(books, query, category, minPrice, maxPrice, sortBy) {
+/*export function filterBooks(books, query, category, minPrice, maxPrice, sortBy) {
   const normalizedQuery = String(query || "").trim().toLowerCase();
 
   const filtered = books.filter((book) => {
