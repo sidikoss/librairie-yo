@@ -4,16 +4,17 @@ export async function fetchBooks() {
   const data = await firebaseApi.get("books", 9000);
 
   if (!data || typeof data !== "object") {
-    console.log("FIREBASE EMPTY OR INVALID:", data);
+    console.error("❌ Firebase books vide ou null:", data);
     return [];
   }
 
-  return Object.entries(data).map(([fbKey, value]) => ({
+  const books = Object.entries(data).map(([fbKey, value]) => ({
     ...value,
     fbKey,
   }));
+  console.log(`✅ ${books.length} livres chargés`);
+  return books;
 }
-
 export async function createBook(payload) {
   const result = await firebaseApi.post("books", payload);
   return result?.name || null;
