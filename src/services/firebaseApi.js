@@ -23,9 +23,10 @@ async function request(path, options = {}, timeoutMs = 10000) {
 }
 
     return await response.json();
-  } catch {
-    return null;
-  } finally {
+ } catch (err) {
+  console.error(`[Firebase] ${options.method || 'GET'} /${path}:`, err.message || err);
+  return null;
+} finally {
     clearTimeout(timer);
   }
 }
