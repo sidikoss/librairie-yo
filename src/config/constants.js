@@ -7,9 +7,11 @@ export const OM_NUMBER = "224613908784";
 export const WA_NUMBER = "224661862044";
 
 export const PRICING_CONFIG = {
-  base: 10000,
-  pageDivider: 10,
-  factor: 1500,
+  basePrice: 5000,
+  firstTierMaxPages: 150,
+  extraTierPages: 100,
+  extraTierPrice: 5000,
+  maxPrice: 25000,
 };
 
 export const STORAGE_KEYS = {

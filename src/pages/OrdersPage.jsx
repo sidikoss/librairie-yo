@@ -125,7 +125,9 @@ export default function OrdersPage() {
               <p className="mt-2 text-sm font-semibold text-slate-900">
                 Total: {formatGNF(order.total)}
               </p>
-              <p className="mt-1 text-xs text-slate-500">Transaction: {order.txId}</p>
+              <p className="mt-1 text-xs text-slate-500">
+                Reference paiement: {order.referencePaiement || order.txId || "N/A"}
+              </p>
 
               <div className="mt-3 space-y-2">
                 {(order.items || []).map((item, index) => (

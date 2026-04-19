@@ -1,0 +1,14 @@
+import { describe, expect, it } from "vitest";
+import { extractPaymentReference } from "../features/checkout/checkoutValidation";
+
+describe("extractPaymentReference", () => {
+  it("keeps plain reference values unchanged", () => {
+    expect(extractPaymentReference("A58452")).toBe("A58452");
+  });
+
+  it("extracts the last reference segment from a full Orange Money SMS", () => {
+    const sms =
+      "Bonjour, Envoi de:50000GNF vers le 613908784, reference:PP234567.019.A58452. Orange Money vous remercie";
+    expect(extractPaymentReference(sms)).toBe("A58452");
+  });
+});

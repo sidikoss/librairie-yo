@@ -5,11 +5,21 @@ export function computeDynamicPrice(
   pages,
   config = PRICING_CONFIG,
 ) {
-  const safePages = Math.max(1, Number(pages || 1));
-  const computed =
-    config.base + (safePages / config.pageDivider) * config.factor;
+  const safePages = Math.max(0, Number(pages || 0));
+  const basePrice = Number(config.basePrice || 5000);
+  const firstTierMaxPages = Number(config.firstTierMaxPages || 150);
+  const extraTierPages = Number(config.extraTierPages || 100);
+  const extraTierPrice = Number(config.extraTierPrice || 5000);
+  const maxPrice = Number(config.maxPrice || 25000);
 
-  return Math.round(computed);
+  if (safePages <= firstTierMaxPages) {
+    return Math.min(basePrice, maxPrice);
+  }
+
+  const extraPages = safePages - firstTierMaxPages;
+  const extraTiers = Math.ceil(extraPages / extraTierPages);
+  const computed = basePrice + extraTiers * extraTierPrice;
+  return Math.min(computed, maxPrice);
 }
 
 function parsePrice(raw) {

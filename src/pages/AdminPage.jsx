@@ -110,7 +110,9 @@ export default function AdminPage() {
       (order) =>
         String(order.name || "").toLowerCase().includes(query) ||
         String(order.phone || "").includes(query) ||
-        String(order.txId || "").toLowerCase().includes(query),
+        String(order.referencePaiement || order.txId || "")
+          .toLowerCase()
+          .includes(query),
     );
   }, [orders, orderQuery]);
 
@@ -519,7 +521,7 @@ export default function AdminPage() {
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-slate-500">
-                  {order.phone} · TX: {order.txId} · Total: {formatGNF(order.total)}
+                  {order.phone} · Ref: {order.referencePaiement || order.txId || "N/A"} · Total: {formatGNF(order.total)}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
@@ -642,3 +644,4 @@ export default function AdminPage() {
     </div>
   );
 }
+
