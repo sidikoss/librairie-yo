@@ -11,13 +11,13 @@ export default function CustomerTrustSection({ totalSoldBooks = 0 }) {
         </p>
         <h3 className="font-heading text-xl font-bold text-slate-900">{TRUST_BANNER}</h3>
         <p className="mt-2 text-sm text-slate-600">
-          Service local, support reactif et suivi transparent de chaque commande.
+          Service local, support réactif et suivi transparent de chaque commande.
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <SalesCounter value={totalSoldBooks} />
           <span className="flag-chip">
             <span className="h-2 w-2 rounded-full bg-guinea-600" />
-            Paiement securise
+              Paiement sécurisé
           </span>
         </div>
       </div>

@@ -31,9 +31,14 @@ async function request(path, options = {}, timeoutMs = 10000) {
     if (!response.ok) {
       const serverError =
         typeof payload?.error === "string" ? payload.error : "Erreur inconnue";
-      console.warn(
-        `[Firebase] ${method} /${path} failed (${response.status}): ${serverError}`,
-      );
+      const silentStatuses = Array.isArray(options.silentStatuses)
+        ? options.silentStatuses
+        : [];
+      if (!silentStatuses.includes(response.status)) {
+        console.warn(
+          `[Firebase] ${method} /${path} failed (${response.status}): ${serverError}`,
+        );
+      }
       return null;
     }
 
@@ -47,8 +52,8 @@ async function request(path, options = {}, timeoutMs = 10000) {
 }
 
 export const firebaseApi = {
-  get(path, timeoutMs) {
-    return request(path, { method: "GET" }, timeoutMs);
+  get(path, timeoutMs, requestOptions = {}) {
+    return request(path, { method: "GET", ...requestOptions }, timeoutMs);
   },
   post(path, data) {
     return request(path, { method: "POST", body: JSON.stringify(data) });

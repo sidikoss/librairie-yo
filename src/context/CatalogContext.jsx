@@ -68,14 +68,13 @@ export function CatalogProvider({ children }) {
         fetchOrders(),
         fetchPromoCodes(),
       ]);
-      console.log("RAW BOOKS:", rawBooks);
-      
+
       const salesMap = buildSalesByBookMap(rawOrders);
-     const normalizedBooks = rawBooks
-  .filter((b) => b && (b.id || b.fbKey))
-  .map((rawBook) =>
-    normalizeBook(rawBook, salesMap[rawBook.fbKey || rawBook.id] || 0)
-  );
+      const normalizedBooks = rawBooks
+        .filter((b) => b && (b.id || b.fbKey))
+        .map((rawBook) =>
+          normalizeBook(rawBook, salesMap[rawBook.fbKey || rawBook.id] || 0),
+        );
 
       setBooks(normalizedBooks);
       setOrders(rawOrders);

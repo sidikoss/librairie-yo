@@ -20,7 +20,9 @@ export async function updateOrderStatus(orderId, status) {
 }
 
 export async function fetchPromoCodes() {
-  const data = await firebaseApi.get("promoCodes");
+  const data = await firebaseApi.get("promoCodes", 10000, {
+    silentStatuses: [401, 403],
+  });
   if (!data) return [];
   return Object.entries(data)
     .map(([fbKey, value]) => ({ ...value, fbKey }))

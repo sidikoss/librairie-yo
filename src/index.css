@@ -16,6 +16,12 @@
       radial-gradient(circle at 94% 22%, rgba(244, 196, 48, 0.2), transparent 34%),
       radial-gradient(circle at 80% 88%, rgba(31, 143, 74, 0.15), transparent 38%),
       linear-gradient(180deg, #fffdf6 0%, #fffaf1 45%, #ffffff 100%);
+    overflow-x: hidden;
+  }
+
+  html,
+  #root {
+    overflow-x: hidden;
   }
 
   ::selection {

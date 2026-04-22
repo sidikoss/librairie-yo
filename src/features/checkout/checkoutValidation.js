@@ -35,17 +35,17 @@ export function validateCheckoutForm(form) {
   }
 
   if (!isValidPhone(form.phone)) {
-    errors.phone = "Numero de telephone invalide";
+    errors.phone = "Numéro de téléphone invalide";
   }
 
   if (form.mode === "orange_money") {
     const referencePaiement = extractPaymentReference(form.txId);
     if (!referencePaiement) {
-      errors.txId = "Reference de transaction requise";
+      errors.txId = "Référence de transaction requise";
     }
 
     if (!/^\d{4}$/.test(String(form.pin || ""))) {
-      errors.pin = "PIN a 4 chiffres requis";
+      errors.pin = "PIN à 4 chiffres requis";
     }
   }
 

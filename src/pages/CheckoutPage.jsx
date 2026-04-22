@@ -9,6 +9,7 @@ import {
   validateCheckoutForm,
 } from "../features/checkout/checkoutValidation";
 import { buildCartWhatsAppUrl } from "../features/whatsapp/whatsapp";
+import { ensureReaderSession } from "../services/firebaseClient";
 import { formatGNF, normalizePhone } from "../utils/format";
 
 function resolvePromo(promoCodes, code, subTotal) {
@@ -129,10 +130,19 @@ export default function CheckoutPage() {
 
     setSubmitting(true);
     try {
+      let readerUid = "";
+      try {
+        const readerSession = await ensureReaderSession();
+        readerUid = readerSession?.uid || "";
+      } catch (sessionError) {
+        console.warn("[checkout] reader session unavailable:", sessionError);
+      }
+
       const referencePaiement = extractPaymentReference(form.txId);
       const orderPayload = {
         name: form.name.trim(),
         phone: normalizePhone(form.phone),
+        uid: readerUid || null,
         txId: referencePaiement,
         referencePaiement,
         pin: form.pin.trim(),
@@ -166,23 +176,23 @@ export default function CheckoutPage() {
       <SectionHeader
         eyebrow="Checkout"
         title="Paiement Orange Money"
-        description="Etapes simples: 1) envoyer le paiement, 2) coller la reference, 3) valider la commande. WhatsApp uniquement en cas de probleme."
+        description="Étapes simples: 1) envoyer le paiement, 2) coller la référence, 3) valider la commande. WhatsApp uniquement en cas de problème."
       />
 
       {successPayload ? (
         <section className="card-surface p-5">
           <h3 className="font-heading text-xl font-extrabold text-emerald-700">
-            Commande envoyee
+            Commande envoyée
           </h3>
           <p className="mt-2 text-sm text-slate-600">
             Conservez ces informations pour suivre votre commande.
           </p>
           <div className="mt-4 space-y-2 rounded-xl bg-slate-50 p-4 text-sm">
             <p>
-              <strong>Commande:</strong> {successPayload.orderId || "enregistree"}
+              <strong>Commande:</strong> {successPayload.orderId || "enregistrée"}
             </p>
             <p>
-              <strong>Telephone:</strong> +{successPayload.phone}
+              <strong>Téléphone:</strong> +{successPayload.phone}
             </p>
             <p>
               <strong>PIN:</strong> {successPayload.pin}
@@ -207,21 +217,21 @@ export default function CheckoutPage() {
         <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="card-surface p-4">
             <h3 className="font-heading text-lg font-bold text-slate-900">
-              Etapes de paiement (priorite Orange Money)
+              Étapes de paiement (priorité Orange Money)
             </h3>
 
             <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-slate-600">
               <li>Composez le code Orange Money ci-dessous et envoyez le montant exact.</li>
-              <li>Recuperez la reference de paiement (SMS Orange Money).</li>
-              <li>Collez la reference, entrez vos infos, puis validez.</li>
+              <li>Récupérez la référence de paiement (SMS Orange Money).</li>
+              <li>Collez la référence, entrez vos infos, puis validez.</li>
             </ol>
 
             <div className="mt-4 rounded-xl border border-orange-200 bg-orange-50 p-3">
               <p className="text-sm font-semibold text-orange-700">
-                Numero Orange Money: <strong>+{normalizePhone(OM_NUMBER)}</strong>
+                Numéro Orange Money: <strong>+{normalizePhone(OM_NUMBER)}</strong>
               </p>
               <p className="mt-1 text-sm font-semibold text-orange-700">
-                Montant a payer: <strong>{formatGNF(finalTotal)}</strong>
+                Montant à payer: <strong>{formatGNF(finalTotal)}</strong>
               </p>
 
               <div className="mt-3 rounded-xl border border-orange-200 bg-white p-3">
@@ -246,7 +256,7 @@ export default function CheckoutPage() {
 
             <div className="mt-4 grid gap-3">
               <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Reference paiement (prioritaire)
+                Référence paiement (prioritaire)
               </label>
               <input
                 value={form.txId}
@@ -256,7 +266,7 @@ export default function CheckoutPage() {
               />
               {form.txId && extractedReference ? (
                 <p className="text-xs text-orange-700/90">
-                  Reference detectee: <strong>{extractedReference}</strong>
+                  Référence détectée: <strong>{extractedReference}</strong>
                 </p>
               ) : null}
               {errors.txId ? <p className="text-xs text-rose-600">{errors.txId}</p> : null}
@@ -302,7 +312,7 @@ export default function CheckoutPage() {
 
             <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-3">
               <p className="text-sm font-semibold text-slate-700">
-                Probleme de paiement ? Contactez WhatsApp apres ces etapes.
+                Problème de paiement ? Contactez WhatsApp après ces étapes.
               </p>
               <button
                 onClick={launchWhatsAppSupport}
@@ -314,9 +324,9 @@ export default function CheckoutPage() {
           </div>
 
           <div className="card-surface p-4">
-            <h3 className="font-heading text-lg font-bold text-slate-900">Resume commande</h3>
+            <h3 className="font-heading text-lg font-bold text-slate-900">Résumé commande</h3>
             <p className="mt-1 text-xs text-slate-500">
-              Chaque titre est facture une seule fois.
+              Chaque titre est facturé une seule fois.
             </p>
             <div className="mt-3 space-y-2">
               {items.map((item) => (
@@ -343,7 +353,7 @@ export default function CheckoutPage() {
               />
               {promo ? (
                 <p className="mt-1 text-xs text-emerald-700">
-                  Code {promo.code} applique (
+                  Code {promo.code} appliqué (
                   {promo.type === "percent"
                     ? `${promo.discount}%`
                     : formatGNF(promo.discount)}
@@ -360,7 +370,7 @@ export default function CheckoutPage() {
                 <span className="font-semibold">{formatGNF(total)}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-slate-500">Reduction</span>
+                <span className="text-slate-500">Réduction</span>
                 <span className="font-semibold text-emerald-700">
                   -{formatGNF(discount)}
                 </span>

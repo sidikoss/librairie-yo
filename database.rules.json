@@ -16,6 +16,10 @@
       ".read": true,
       ".write": true
     },
+    "promoCodes": {
+      ".read": true,
+      ".write": true
+    },
     "pending_orders": {
       ".read": "auth != null",
       ".write": true
