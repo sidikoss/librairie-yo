@@ -8,6 +8,7 @@ const CartPage = lazy(() => import("./pages/CartPage"));
 const CheckoutPage = lazy(() => import("./pages/CheckoutPage"));
 const FavoritesPage = lazy(() => import("./pages/FavoritesPage"));
 const OrdersPage = lazy(() => import("./pages/OrdersPage"));
+const SecureReaderPage = lazy(() => import("./pages/SecureReaderPage"));
 const AdminPage = lazy(() => import("./pages/AdminPage"));
 const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
 
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="/checkout" element={<CheckoutPage />} />
           <Route path="/favoris" element={<FavoritesPage />} />
           <Route path="/commandes" element={<OrdersPage />} />
+          <Route path="/lecture" element={<SecureReaderPage />} />
           <Route path="/orders" element={<Navigate to="/commandes" replace />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="*" element={<NotFoundPage />} />

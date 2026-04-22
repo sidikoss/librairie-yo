@@ -32,6 +32,7 @@ self.addEventListener('activate', e => {
 // ── Helper : requêtes à ne jamais mettre en cache ────────────
 function isUncacheable(url) {
   return (
+    url.pathname.startsWith('/api/reader/')   ||
     url.hostname.includes('firebaseio.com')   ||
     url.hostname.includes('googleapis.com')   ||
     url.hostname.includes('anthropic.com')    ||

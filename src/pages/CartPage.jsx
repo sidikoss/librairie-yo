@@ -63,7 +63,7 @@ export default function CartPage() {
 
             <div className="flex items-center gap-2">
               <span className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
-                Quantite: 1
+                Achat unique
               </span>
               <button
                 onClick={() => removeItem(item.bookId)}
