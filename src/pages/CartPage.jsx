@@ -1,11 +1,10 @@
 import { Link } from "react-router-dom";
 import SectionHeader from "../components/ui/SectionHeader";
 import { useCart } from "../context/CartContext";
-import { buildCartWhatsAppUrl } from "../features/whatsapp/whatsapp";
 import { formatGNF } from "../utils/format";
 
 export default function CartPage() {
-  const { items, total, updateQuantity, removeItem, clearCart } = useCart();
+  const { items, total, removeItem, clearCart } = useCart();
 
   if (!items.length) {
     return (
@@ -25,19 +24,20 @@ export default function CartPage() {
     );
   }
 
-  const whatsappUrl = buildCartWhatsAppUrl(items);
-
   return (
     <div className="space-y-6">
       <SectionHeader
         eyebrow="Panier"
         title="Finalisez votre commande"
-        description="Ajustez les quantités puis commandez directement via WhatsApp."
+        description="Chaque livre peut etre commande une seule fois."
       />
 
       <section className="card-surface divide-y divide-slate-200">
         {items.map((item) => (
-          <div key={item.bookId} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div
+            key={item.bookId}
+            className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
+          >
             <div className="flex items-center gap-3">
               <div className="h-14 w-12 overflow-hidden rounded bg-slate-100">
                 {item.image ? (
@@ -50,7 +50,9 @@ export default function CartPage() {
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center text-xl">📘</div>
+                  <div className="flex h-full w-full items-center justify-center text-xl">
+                    Livre
+                  </div>
                 )}
               </div>
               <div>
@@ -60,19 +62,9 @@ export default function CartPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => updateQuantity(item.bookId, item.qty - 1)}
-                className="rounded-lg border border-slate-300 px-3 py-1 text-sm"
-              >
-                -
-              </button>
-              <span className="min-w-8 text-center text-sm font-semibold">{item.qty}</span>
-              <button
-                onClick={() => updateQuantity(item.bookId, item.qty + 1)}
-                className="rounded-lg border border-slate-300 px-3 py-1 text-sm"
-              >
-                +
-              </button>
+              <span className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
+                Quantite: 1
+              </span>
               <button
                 onClick={() => removeItem(item.bookId)}
                 className="ml-2 rounded-lg border border-rose-200 px-3 py-1 text-sm text-rose-600"
@@ -89,15 +81,7 @@ export default function CartPage() {
           <p className="text-sm text-slate-500">Total</p>
           <p className="text-xl font-extrabold text-slate-900">{formatGNF(total)}</p>
         </div>
-        <div className="mt-4 grid gap-2 sm:grid-cols-3">
-          <a
-            href={whatsappUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="rounded-xl bg-[#25D366] px-4 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-[#1ebd59]"
-          >
-            Commander via WhatsApp
-          </a>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
           <Link
             to="/checkout"
             className="rounded-xl bg-slate-900 px-4 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-slate-700"

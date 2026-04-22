@@ -1,0 +1,28 @@
+{
+  "rules": {
+    "catalog": {
+      ".read": true,
+      ".write": false
+    },
+    "books": {
+      ".read": true,
+      ".write": false
+    },
+    "book-files": {
+      ".read": true,
+      ".write": false
+    },
+    "orders": {
+      ".read": true,
+      ".write": true
+    },
+    "pending_orders": {
+      ".read": "auth != null",
+      ".write": true
+    },
+    "admin": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}

@@ -9,14 +9,14 @@ export default function BookGrid({
 }) {
   if (!books.length) {
     return (
-      <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-slate-500">
+      <div className="rounded-2xl border border-dashed border-brand-200 bg-white/90 p-8 text-center text-slate-500">
         {emptyMessage}
       </div>
     );
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
       {books.map((book) => (
         <BookCard
           key={book.id}

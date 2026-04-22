@@ -10,7 +10,7 @@ export default function PriceTag({ price, discount = 0 }) {
 
   return (
     <div>
-      <p className="text-lg font-bold text-rose-600">{formatGNF(finalPrice)}</p>
+      <p className="text-lg font-bold text-brand-600">{formatGNF(finalPrice)}</p>
       <p className="text-xs text-slate-500 line-through">{formatGNF(basePrice)}</p>
     </div>
   );

@@ -11,6 +11,26 @@ function mapCollection(data) {
     }));
 }
 
+function normalizeBootstrapBooks(books) {
+  if (!Array.isArray(books)) return [];
+  return books
+    .filter((book) => book && typeof book === "object")
+    .map((book) => ({
+      ...book,
+      fbKey: book.fbKey || book.id,
+    }));
+}
+
+async function loadBootstrapBooks() {
+  try {
+    const module = await import("../catalogBootstrap");
+    return normalizeBootstrapBooks(module.BOOTSTRAP_BOOKS);
+  } catch (error) {
+    console.warn("[catalog] unable to load bootstrap catalog", error);
+    return [];
+  }
+}
+
 async function syncBookToLegacyNode(bookId, payload) {
   try {
     await firebaseApi.put(`books/${bookId}`, payload);
@@ -28,17 +48,27 @@ async function patchBookLegacyNode(bookId, payload) {
 }
 
 export async function fetchBooks() {
-  const catalogData = await firebaseApi.get("catalog", 9000);
+  const [catalogData, booksData] = await Promise.all([
+    firebaseApi.get("catalog", 9000),
+    firebaseApi.get("books", 15000),
+  ]);
+
   const catalogBooks = mapCollection(catalogData);
   if (catalogBooks.length > 0) {
     return catalogBooks;
   }
 
-  // Fallback for legacy datasets where catalog is still empty.
-  const booksData = await firebaseApi.get("books", 15000);
+  // Legacy dataset fallback.
   const books = mapCollection(booksData);
   if (books.length > 0) {
     return books;
+  }
+
+  // Emergency fallback for first paint when Firebase data is unavailable.
+  const bootstrapBooks = await loadBootstrapBooks();
+  if (bootstrapBooks.length > 0) {
+    console.warn("[catalog] using bundled bootstrap books fallback");
+    return bootstrapBooks;
   }
 
   console.error("[catalog] empty or unavailable: no books found");

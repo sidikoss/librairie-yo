@@ -96,7 +96,7 @@ export default function CheckoutPage() {
     }
   };
 
-  const launchWhatsApp = () => {
+  const launchWhatsAppSupport = () => {
     const nextErrors = validateCheckoutForm({ ...form, mode: "whatsapp" });
     if (Object.keys(nextErrors).length) {
       setErrors(nextErrors);
@@ -106,6 +106,7 @@ export default function CheckoutPage() {
     const whatsappUrl = buildCartWhatsAppUrl(items, {
       name: form.name,
       phone: form.phone,
+      txId: extractedReference || form.txId,
     });
     window.open(whatsappUrl, "_blank", "noopener,noreferrer");
   };
@@ -113,7 +114,7 @@ export default function CheckoutPage() {
   const copyOrangeMoneyCode = async () => {
     try {
       await navigator.clipboard.writeText(orangeMoneyUssdCode);
-      setCopyFeedback("Code USSD copie.");
+      setCopyFeedback("Code Orange Money copie.");
     } catch {
       setCopyFeedback("Copie automatique impossible, copiez le code manuellement.");
     }
@@ -143,8 +144,8 @@ export default function CheckoutPage() {
           bookId: item.bookId,
           fbKey: item.bookId,
           title: item.title,
-          qty: item.qty,
-          price: Number(item.unitPrice || 0) * Number(item.qty || 0),
+          qty: 1,
+          price: Number(item.unitPrice || 0),
         })),
       };
 
@@ -164,14 +165,14 @@ export default function CheckoutPage() {
     <div className="space-y-6">
       <SectionHeader
         eyebrow="Checkout"
-        title="Finalisez votre commande"
-        description="Canal principal: WhatsApp. Option de secours: validation Orange Money."
+        title="Paiement Orange Money"
+        description="Etapes simples: 1) envoyer le paiement, 2) coller la reference, 3) valider la commande. WhatsApp uniquement en cas de probleme."
       />
 
       {successPayload ? (
         <section className="card-surface p-5">
           <h3 className="font-heading text-xl font-extrabold text-emerald-700">
-            Commande Orange Money envoyee
+            Commande envoyee
           </h3>
           <p className="mt-2 text-sm text-slate-600">
             Conservez ces informations pour suivre votre commande.
@@ -205,48 +206,27 @@ export default function CheckoutPage() {
       ) : (
         <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="card-surface p-4">
-            <h3 className="font-heading text-lg font-bold text-slate-900">Informations client</h3>
-            <div className="mt-3 grid gap-3">
-              <input
-                value={form.name}
-                onChange={(event) => handleFieldChange("name", event.target.value)}
-                placeholder="Nom complet"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-300 focus:ring"
-              />
-              {errors.name ? <p className="text-xs text-rose-600">{errors.name}</p> : null}
-              <input
-                value={form.phone}
-                onChange={(event) => handleFieldChange("phone", event.target.value)}
-                placeholder="+224 6XX XXX XXX"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-300 focus:ring"
-              />
-              {errors.phone ? <p className="text-xs text-rose-600">{errors.phone}</p> : null}
-            </div>
+            <h3 className="font-heading text-lg font-bold text-slate-900">
+              Etapes de paiement (priorite Orange Money)
+            </h3>
 
-            <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <p className="text-sm font-semibold text-slate-700">Commander via WhatsApp (priorite)</p>
-              <p className="mt-1 text-xs text-slate-500">
-                Le message est pre-rempli avec les livres et le total.
-              </p>
-              <button
-                onClick={launchWhatsApp}
-                className="mt-3 w-full rounded-xl bg-[#25D366] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1ebd59]"
-              >
-                Commander via WhatsApp
-              </button>
-            </div>
+            <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-slate-600">
+              <li>Composez le code Orange Money ci-dessous et envoyez le montant exact.</li>
+              <li>Recuperez la reference de paiement (SMS Orange Money).</li>
+              <li>Collez la reference, entrez vos infos, puis validez.</li>
+            </ol>
 
-            <div className="mt-5 rounded-xl border border-orange-200 bg-orange-50 p-3">
+            <div className="mt-4 rounded-xl border border-orange-200 bg-orange-50 p-3">
               <p className="text-sm font-semibold text-orange-700">
-                Option secours: Orange Money
+                Numero Orange Money: <strong>+{normalizePhone(OM_NUMBER)}</strong>
               </p>
-              <p className="mt-1 text-xs text-orange-700/80">
-                Numero OM: <strong>+{normalizePhone(OM_NUMBER)}</strong>
+              <p className="mt-1 text-sm font-semibold text-orange-700">
+                Montant a payer: <strong>{formatGNF(finalTotal)}</strong>
               </p>
 
               <div className="mt-3 rounded-xl border border-orange-200 bg-white p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">
-                  Code USSD a copier/coller
+                  Code Orange Money
                 </p>
                 <p className="mt-1 break-all font-mono text-sm text-orange-800">
                   {orangeMoneyUssdCode}
@@ -262,59 +242,88 @@ export default function CheckoutPage() {
                   <p className="mt-1 text-xs text-orange-700/80">{copyFeedback}</p>
                 ) : null}
               </div>
+            </div>
 
-              <div className="mt-3 grid gap-3">
-                <input
-                  value={form.txId}
-                  onChange={(event) => handleFieldChange("txId", event.target.value)}
-                  placeholder="Reference paiement Orange Money"
-                  className="rounded-xl border border-orange-200 bg-white px-3 py-2 text-sm outline-none ring-orange-200 focus:ring"
-                />
-                <p className="text-xs text-orange-700/80">
-                  Entrez votre reference (ex: <strong>A58452</strong>) ou collez tout votre SMS Orange Money (ex:
-                  <strong> "Bonjour, Envoi de:XXXGNF vers le XXXXXXXXX, reference:PPXXXXXX.XXXX.A58452. Orange Money vous remercie"</strong>).
+            <div className="mt-4 grid gap-3">
+              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Reference paiement (prioritaire)
+              </label>
+              <input
+                value={form.txId}
+                onChange={(event) => handleFieldChange("txId", event.target.value)}
+                placeholder="Ex: A58452 ou collez le SMS complet"
+                className="rounded-xl border border-orange-200 bg-white px-3 py-2 text-sm outline-none ring-orange-200 focus:ring"
+              />
+              {form.txId && extractedReference ? (
+                <p className="text-xs text-orange-700/90">
+                  Reference detectee: <strong>{extractedReference}</strong>
                 </p>
-                {form.txId && extractedReference ? (
-                  <p className="text-xs text-orange-700/90">
-                    Reference detectee: <strong>{extractedReference}</strong>
-                  </p>
-                ) : null}
-                {errors.txId ? <p className="text-xs text-rose-600">{errors.txId}</p> : null}
-                <input
-                  type="password"
-                  maxLength={4}
-                  value={form.pin}
-                  onChange={(event) =>
-                    handleFieldChange(
-                      "pin",
-                      event.target.value.replace(/[^\d]/g, ""),
-                    )
-                  }
-                  placeholder="PIN secret (4 chiffres)"
-                  className="rounded-xl border border-orange-200 bg-white px-3 py-2 text-sm outline-none ring-orange-200 focus:ring"
-                />
-                {errors.pin ? <p className="text-xs text-rose-600">{errors.pin}</p> : null}
-                <button
-                  onClick={submitOrangeMoneyOrder}
-                  disabled={submitting}
-                  className="rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {submitting ? "Envoi..." : "Soumettre la commande Orange Money"}
-                </button>
-              </div>
+              ) : null}
+              {errors.txId ? <p className="text-xs text-rose-600">{errors.txId}</p> : null}
+            </div>
+
+            <div className="mt-4 grid gap-3">
+              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Informations client
+              </label>
+              <input
+                value={form.name}
+                onChange={(event) => handleFieldChange("name", event.target.value)}
+                placeholder="Nom complet"
+                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-300 focus:ring"
+              />
+              {errors.name ? <p className="text-xs text-rose-600">{errors.name}</p> : null}
+              <input
+                value={form.phone}
+                onChange={(event) => handleFieldChange("phone", event.target.value)}
+                placeholder="+224 6XX XXX XXX"
+                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-300 focus:ring"
+              />
+              {errors.phone ? <p className="text-xs text-rose-600">{errors.phone}</p> : null}
+              <input
+                type="password"
+                maxLength={4}
+                value={form.pin}
+                onChange={(event) =>
+                  handleFieldChange("pin", event.target.value.replace(/[^\d]/g, ""))
+                }
+                placeholder="PIN secret (4 chiffres)"
+                className="rounded-xl border border-orange-200 bg-white px-3 py-2 text-sm outline-none ring-orange-200 focus:ring"
+              />
+              {errors.pin ? <p className="text-xs text-rose-600">{errors.pin}</p> : null}
+              <button
+                onClick={submitOrangeMoneyOrder}
+                disabled={submitting}
+                className="rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {submitting ? "Envoi..." : "Valider ma commande"}
+              </button>
+            </div>
+
+            <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-sm font-semibold text-slate-700">
+                Probleme de paiement ? Contactez WhatsApp apres ces etapes.
+              </p>
+              <button
+                onClick={launchWhatsAppSupport}
+                className="mt-3 w-full rounded-xl bg-[#25D366] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1ebd59]"
+              >
+                Contacter WhatsApp (secours)
+              </button>
             </div>
           </div>
 
           <div className="card-surface p-4">
             <h3 className="font-heading text-lg font-bold text-slate-900">Resume commande</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Chaque titre est facture une seule fois.
+            </p>
             <div className="mt-3 space-y-2">
               {items.map((item) => (
                 <div key={item.bookId} className="flex items-start justify-between gap-3 text-sm">
-                  <p className="text-slate-700">
-                    {item.title} <span className="text-slate-400">x{item.qty}</span>
-                  </p>
+                  <p className="text-slate-700">{item.title}</p>
                   <p className="font-semibold text-slate-900">
-                    {formatGNF(Number(item.unitPrice || 0) * Number(item.qty || 0))}
+                    {formatGNF(Number(item.unitPrice || 0))}
                   </p>
                 </div>
               ))}
@@ -334,7 +343,11 @@ export default function CheckoutPage() {
               />
               {promo ? (
                 <p className="mt-1 text-xs text-emerald-700">
-                  Code {promo.code} applique ({promo.type === "percent" ? `${promo.discount}%` : formatGNF(promo.discount)})
+                  Code {promo.code} applique (
+                  {promo.type === "percent"
+                    ? `${promo.discount}%`
+                    : formatGNF(promo.discount)}
+                  )
                 </p>
               ) : form.promoCode ? (
                 <p className="mt-1 text-xs text-rose-600">Code invalide ou inactif</p>
@@ -348,11 +361,15 @@ export default function CheckoutPage() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-500">Reduction</span>
-                <span className="font-semibold text-emerald-700">-{formatGNF(discount)}</span>
+                <span className="font-semibold text-emerald-700">
+                  -{formatGNF(discount)}
+                </span>
               </div>
               <div className="flex items-center justify-between text-base">
                 <span className="font-semibold text-slate-900">Total final</span>
-                <span className="font-extrabold text-slate-900">{formatGNF(finalTotal)}</span>
+                <span className="font-extrabold text-slate-900">
+                  {formatGNF(finalTotal)}
+                </span>
               </div>
             </div>
           </div>

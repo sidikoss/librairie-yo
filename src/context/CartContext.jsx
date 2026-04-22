@@ -1,22 +1,56 @@
-import { createContext, useContext, useMemo } from "react";
+import { createContext, useContext, useEffect, useMemo } from "react";
 import { STORAGE_KEYS } from "../config/constants";
 import { useLocalStorageState } from "../hooks/useLocalStorageState";
 import { calculateCartTotal } from "../features/checkout/cartMath";
 
 const CartContext = createContext(null);
 
+function sanitizeCartItems(items) {
+  const list = Array.isArray(items) ? items : [];
+  const seen = new Set();
+  const normalized = [];
+  let changed = false;
+
+  for (const item of list) {
+    if (!item?.bookId) {
+      changed = true;
+      continue;
+    }
+
+    if (seen.has(item.bookId)) {
+      changed = true;
+      continue;
+    }
+
+    seen.add(item.bookId);
+    if (Number(item.qty || 0) !== 1) {
+      changed = true;
+    }
+
+    normalized.push({
+      ...item,
+      qty: 1,
+    });
+  }
+
+  return { normalized, changed };
+}
+
 export function CartProvider({ children }) {
   const [items, setItems] = useLocalStorageState(STORAGE_KEYS.cart, []);
+
+  useEffect(() => {
+    setItems((prev) => {
+      const { normalized, changed } = sanitizeCartItems(prev);
+      return changed ? normalized : prev;
+    });
+  }, [setItems]);
 
   const addItem = (book) => {
     setItems((prev) => {
       const existing = prev.find((item) => item.bookId === book.id);
       if (existing) {
-        return prev.map((item) =>
-          item.bookId === book.id
-            ? { ...item, qty: item.qty + 1 }
-            : item,
-        );
+        return prev;
       }
 
       return [
@@ -40,14 +74,17 @@ export function CartProvider({ children }) {
   };
 
   const updateQuantity = (bookId, qty) => {
+    if (Number(qty || 0) <= 0) {
+      removeItem(bookId);
+      return;
+    }
+
     setItems((prev) =>
-      prev
-        .map((item) =>
-          item.bookId === bookId
-            ? { ...item, qty: Math.max(1, Number(qty || 1)) }
-            : item,
-        )
-        .filter((item) => item.qty > 0),
+      prev.map((item) =>
+        item.bookId === bookId
+          ? { ...item, qty: 1 }
+          : item,
+      ),
     );
   };
 
@@ -59,7 +96,7 @@ export function CartProvider({ children }) {
   );
 
   const count = useMemo(
-    () => items.reduce((sum, item) => sum + Number(item.qty || 0), 0),
+    () => items.length,
     [items],
   );
 

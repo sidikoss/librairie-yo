@@ -12,8 +12,8 @@ export default function BookCard({
   isFavorite,
 }) {
   return (
-    <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-soft">
-      <div className="relative aspect-[3/4] overflow-hidden bg-slate-100">
+    <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-white/70 bg-white/95 shadow-soft transition duration-300 hover:-translate-y-1.5 hover:shadow-warm">
+      <div className="relative aspect-[3/4] overflow-hidden bg-gradient-to-br from-brand-50 via-accent-100/60 to-guinea-50">
         {book.image ? (
           <img
             src={book.image}
@@ -24,8 +24,8 @@ export default function BookCard({
             height={400}
           />
         ) : (
-          <div className="flex h-full items-center justify-center bg-gradient-to-br from-brand-100 to-slate-100 text-5xl">
-            {book.emoji || "📚"}
+          <div className="flex h-full items-center justify-center text-5xl text-brand-700">
+            {book.emoji || "Livre"}
           </div>
         )}
 
@@ -37,10 +37,10 @@ export default function BookCard({
 
         <button
           onClick={() => onToggleFavorite(book.id)}
-          className="absolute right-3 top-3 rounded-full bg-white/90 p-2 text-sm shadow"
+          className="absolute right-3 top-3 rounded-full border border-white/70 bg-white/95 p-2 text-sm shadow"
           aria-label="Ajouter aux favoris"
         >
-          {isFavorite ? "❤️" : "🤍"}
+          {isFavorite ? "♥" : "♡"}
         </button>
       </div>
 
@@ -62,15 +62,15 @@ export default function BookCard({
         <div className="mt-auto flex flex-col gap-2">
           <button
             onClick={() => onAddToCart(book)}
-            className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700"
+            className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700"
           >
-            Acheter maintenant
+            Ajouter au panier
           </button>
           <a
             href={buildBookWhatsAppUrl(book, 1)}
             target="_blank"
             rel="noreferrer"
-            className="rounded-xl bg-[#25D366] px-4 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-[#1ebd59]"
+            className="rounded-xl bg-guinea-600 px-4 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-guinea-700"
           >
             Commander via WhatsApp
           </a>
