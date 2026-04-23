@@ -76,24 +76,37 @@ export default function CartPage() {
         ))}
       </section>
 
-      <section className="card-surface p-4">
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-slate-500">Total</p>
-          <p className="text-xl font-extrabold text-slate-900">{formatGNF(total)}</p>
+      <section className="overflow-hidden rounded-2xl border border-white/70 bg-white/95 shadow-soft">
+        <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-slate-500">Total de la commande</p>
+            <p className="text-2xl font-extrabold text-slate-900">{formatGNF(total)}</p>
+          </div>
         </div>
-        <div className="mt-4 grid gap-2 sm:grid-cols-2">
-          <Link
-            to="/checkout"
-            className="rounded-xl bg-slate-900 px-4 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-slate-700"
-          >
-            Continuer vers checkout
-          </Link>
-          <button
-            onClick={clearCart}
-            className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-          >
-            Vider le panier
-          </button>
+        <div className="p-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Link
+              to="/checkout"
+              className="group flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-brand-700 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-brand-200 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+              Payer avec Orange Money
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+              </svg>
+            </Link>
+            <button
+              onClick={clearCart}
+              className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-5 py-3 text-sm font-medium text-slate-600 transition-all duration-200 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              Vider le panier
+            </button>
+          </div>
         </div>
       </section>
     </div>
