@@ -1,4 +1,3 @@
-import { Link } from "react-router-dom";
 import Badge from "../ui/Badge";
 import PriceTag from "../ui/PriceTag";
 import RatingStars from "../ui/RatingStars";
@@ -75,18 +74,14 @@ export default function BookCard({
             href={buildBookWhatsAppUrl(book, 1)}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-xl bg-guinea-600 px-4 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-guinea-700"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-guinea-600 px-4 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-guinea-700"
             aria-label={`Commander "${book.title}" via WhatsApp (ouvre dans un nouvel onglet)`}
           >
-            Commander via WhatsApp
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 fill-current">
+              <path d="M19.05 4.94A9.94 9.94 0 0 0 12 2C6.48 2 2 6.48 2 12c0 1.77.46 3.51 1.34 5.04L2 22l5.1-1.33A9.95 9.95 0 0 0 12 22c5.52 0 10-4.48 10-10 0-2.67-1.04-5.18-2.95-7.06ZM12 20.1c-1.52 0-3-.4-4.31-1.16l-.31-.18-3.03.79.81-2.95-.2-.31A8.03 8.03 0 0 1 4 12a8 8 0 1 1 8 8.1Z"/>
+            </svg>
+            WhatsApp
           </a>
-          <Link
-            to="/checkout"
-            className="rounded-xl border border-slate-300 px-4 py-2.5 text-center text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-            aria-label="Aller au checkout"
-          >
-            Voir le checkout
-          </Link>
         </div>
       </div>
     </article>
