@@ -1,9 +1,8 @@
-export const APP_NAME = "Librairie YO";
+// src/config/constants.js
+// ⚠️  ADMIN_PASSWORD supprimé — la vérification se fait désormais côté serveur
+//     via /api/admin-auth (variable d'env ADMIN_PASSWORD sur Vercel, non préfixée VITE_)
 
-// Admin password is now read from environment variable for security.
-// Set VITE_ADMIN_PASSWORD in your .env file or Vercel environment variables.
-// Falls back to a default only for development convenience.
-export const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || "admin123";
+export const APP_NAME = "Librairie YO";
 export const FIREBASE_DB_URL = "https://librairie-yo-default-rtdb.firebaseio.com";
 export const OM_NUMBER = "224613908784";
 export const WA_NUMBER = "224661862044";
@@ -77,6 +76,6 @@ export const CUSTOMER_REVIEWS = [
     id: "r3",
     name: "F. Camara",
     rating: 4,
-    text: "Très pratique sur mobile. J’ai trouvé mes livres d’informatique rapidement.",
+    text: "Très pratique sur mobile. J'ai trouvé mes livres d'informatique rapidement.",
   },
 ];
