@@ -13,18 +13,18 @@ export default function Navbar() {
   const { count } = useCart();
 
   return (
-    <header className="sticky top-0 z-40 border-b border-white/70 bg-white/88 backdrop-blur-xl">
+    <header className="sticky top-0 z-40 border-b border-white/70 bg-white/88 backdrop-blur-xl" role="banner">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-        <Link to="/" className="group inline-flex items-center gap-2">
-          <span className="h-3 w-3 rounded-full bg-brand-600 shadow-sm shadow-brand-300" />
-          <span className="h-3 w-3 rounded-full bg-accent-500 shadow-sm shadow-accent-200" />
-          <span className="h-3 w-3 rounded-full bg-guinea-600 shadow-sm shadow-guinea-200" />
+        <Link to="/" className="group inline-flex items-center gap-2" aria-label="Accueil - Librairie YO">
+          <span className="h-3 w-3 rounded-full bg-brand-600 shadow-sm shadow-brand-300" aria-hidden="true" />
+          <span className="h-3 w-3 rounded-full bg-accent-500 shadow-sm shadow-accent-200" aria-hidden="true" />
+          <span className="h-3 w-3 rounded-full bg-guinea-600 shadow-sm shadow-guinea-200" aria-hidden="true" />
           <span className="pl-1 font-heading text-lg font-extrabold tracking-tight text-slate-900 transition group-hover:text-brand-700">
             {APP_NAME}
           </span>
         </Link>
 
-        <nav className="hidden items-center gap-2 md:flex">
+        <nav className="hidden items-center gap-2 md:flex" aria-label="Navigation principale">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
@@ -46,10 +46,11 @@ export default function Navbar() {
           <Link
             to="/panier"
             className="inline-flex items-center gap-2 rounded-full bg-guinea-600 px-3.5 py-2 text-xs font-semibold text-white shadow-md shadow-guinea-200 transition hover:bg-guinea-700"
+            aria-label={count > 0 ? `Panier avec ${count} article${count > 1 ? "s" : ""}` : "Panier vide"}
           >
-            <span>Panier</span>
+            <span aria-hidden="true">Panier</span>
             {count > 0 ? (
-              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-accent-500 px-1 text-[11px] text-slate-900">
+              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-accent-500 px-1 text-[11px] text-slate-900" aria-hidden="true">
                 {count}
               </span>
             ) : null}
@@ -57,13 +58,14 @@ export default function Navbar() {
           <Link
             to="/admin"
             className="hidden rounded-full border border-brand-200 bg-white px-3 py-2 text-xs font-semibold text-brand-700 transition hover:bg-brand-50 sm:inline-flex"
+            aria-label="Accès administration"
           >
             Admin
           </Link>
         </div>
       </div>
 
-      <nav className="mx-auto flex max-w-6xl gap-2 overflow-x-auto px-4 pb-3 md:hidden">
+      <nav className="mx-auto flex max-w-6xl gap-2 overflow-x-auto px-4 pb-3 md:hidden" aria-label="Navigation mobile">
         {navItems.map((item) => (
           <NavLink
             key={item.to}

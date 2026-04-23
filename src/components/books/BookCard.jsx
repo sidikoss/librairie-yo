@@ -12,24 +12,27 @@ export default function BookCard({
   isFavorite,
 }) {
   return (
-    <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-white/70 bg-white/95 shadow-soft transition duration-300 hover:-translate-y-1.5 hover:shadow-warm">
+    <article 
+      className="group flex h-full flex-col overflow-hidden rounded-2xl border border-white/70 bg-white/95 shadow-soft transition duration-300 hover:-translate-y-1.5 hover:shadow-warm"
+      aria-labelledby={`book-title-${book.id}`}
+    >
       <div className="relative aspect-[3/4] overflow-hidden bg-gradient-to-br from-brand-50 via-accent-100/60 to-guinea-50">
         {book.image ? (
           <img
             src={book.image}
-            alt={book.title}
+            alt={`Couverture du livre "${book.title}" par ${book.author}`}
             loading="lazy"
             className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
             width={300}
             height={400}
           />
         ) : (
-          <div className="flex h-full items-center justify-center text-5xl text-brand-700">
+          <div className="flex h-full items-center justify-center text-5xl text-brand-700" aria-hidden="true">
             {book.emoji || "Livre"}
           </div>
         )}
 
-        <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
+        <div className="absolute left-3 top-3 flex flex-wrap gap-1.5" role="list" aria-label="Badges du livre">
           {book.isNew ? <Badge tone="new">Nouveau</Badge> : null}
           {book.isPopular ? <Badge tone="popular">Populaire</Badge> : null}
           {book.discount > 0 ? <Badge tone="promo">Promo</Badge> : null}
@@ -38,9 +41,10 @@ export default function BookCard({
         <button
           onClick={() => onToggleFavorite(book.id)}
           className="absolute right-3 top-3 rounded-full border border-white/70 bg-white/95 p-2 text-sm shadow"
-          aria-label="Ajouter aux favoris"
+          aria-label={isFavorite ? `Retirer "${book.title}" des favoris` : `Ajouter "${book.title}" aux favoris`}
+          aria-pressed={isFavorite}
         >
-          {isFavorite ? "♥" : "♡"}
+          <span aria-hidden="true">{isFavorite ? "♥" : "♡"}</span>
         </button>
       </div>
 
@@ -48,7 +52,7 @@ export default function BookCard({
         <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-brand-600">
           {book.category}
         </p>
-        <h3 className="line-clamp-2 font-heading text-lg font-bold text-slate-900">
+        <h3 id={`book-title-${book.id}`} className="line-clamp-2 font-heading text-lg font-bold text-slate-900">
           {book.title}
         </h3>
         <p className="mb-3 text-sm text-slate-500">{book.author}</p>
@@ -63,20 +67,23 @@ export default function BookCard({
           <button
             onClick={() => onAddToCart(book)}
             className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700"
+            aria-label={`Ajouter "${book.title}" au panier`}
           >
             Ajouter au panier
           </button>
           <a
             href={buildBookWhatsAppUrl(book, 1)}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className="rounded-xl bg-guinea-600 px-4 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-guinea-700"
+            aria-label={`Commander "${book.title}" via WhatsApp (ouvre dans un nouvel onglet)`}
           >
             Commander via WhatsApp
           </a>
           <Link
             to="/checkout"
             className="rounded-xl border border-slate-300 px-4 py-2.5 text-center text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+            aria-label="Aller au checkout"
           >
             Voir le checkout
           </Link>
