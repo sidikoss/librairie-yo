@@ -1,7 +1,9 @@
 export const APP_NAME = "Librairie YO";
 
-// Existing production credentials/constants kept to avoid backend breakage.
-export const ADMIN_PASSWORD = "papiraro2143";
+// Admin password is now read from environment variable for security.
+// Set VITE_ADMIN_PASSWORD in your .env file or Vercel environment variables.
+// Falls back to a default only for development convenience.
+export const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || "admin123";
 export const FIREBASE_DB_URL = "https://librairie-yo-default-rtdb.firebaseio.com";
 export const OM_NUMBER = "224613908784";
 export const WA_NUMBER = "224661862044";
