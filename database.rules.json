@@ -9,20 +9,23 @@
       ".write": false
     },
     "book-files": {
-      ".read": true,
+      ".read": "auth != null",
       ".write": false
     },
     "orders": {
       ".read": true,
-      ".write": true
+      "$orderId": {
+        ".write": "!data.exists() && newData.hasChildren(['phone','items','status']) && newData.child('status').val() === 'pending'",
+        ".validate": "newData.hasChildren(['phone','items','status','createdAt'])"
+      }
     },
     "promoCodes": {
       ".read": true,
-      ".write": true
+      ".write": "auth != null"
     },
     "pending_orders": {
       ".read": "auth != null",
-      ".write": true
+      ".write": "auth != null"
     },
     "admin": {
       ".read": "auth != null",

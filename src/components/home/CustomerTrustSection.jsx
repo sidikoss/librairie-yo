@@ -1,41 +1,82 @@
+import { useEffect, useState } from "react";
 import { CUSTOMER_REVIEWS, TRUST_BANNER } from "../../config/constants";
 import RatingStars from "../ui/RatingStars";
 import SalesCounter from "../ui/SalesCounter";
 
+function AnimatedCounter({ target }) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    if (!target || target <= 0) return;
+    const duration = 1500;
+    const steps = 30;
+    const increment = target / steps;
+    let current = 0;
+    const timer = setInterval(() => {
+      current += increment;
+      if (current >= target) {
+        setCount(target);
+        clearInterval(timer);
+      } else {
+        setCount(Math.floor(current));
+      }
+    }, duration / steps);
+    return () => clearInterval(timer);
+  }, [target]);
+  return <span>{count}</span>;
+}
+
 export default function CustomerTrustSection({ totalSoldBooks = 0 }) {
   return (
-    <section className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-      <div className="card-surface p-5">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-brand-600">
+    <section className="grid gap-5 lg:grid-cols-[1.2fr_1fr]">
+      {/* Trust card */}
+      <div className="card-surface p-6 transition-all duration-300 hover:shadow-warm">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-brand-500">
           Confiance client
         </p>
-        <h3 className="font-heading text-xl font-bold text-slate-900">{TRUST_BANNER}</h3>
-        <p className="mt-2 text-sm text-slate-600">
+        <h3 className="font-heading text-2xl font-bold text-slate-900">{TRUST_BANNER}</h3>
+        <p className="mt-3 text-sm leading-relaxed text-slate-600">
           Service local, support réactif et suivi transparent de chaque commande.
         </p>
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <SalesCounter value={totalSoldBooks} />
+        <div className="mt-5 flex flex-wrap items-center gap-3">
+          <div className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-guinea-50 to-guinea-100 px-4 py-2.5 text-sm font-bold text-guinea-700 shadow-sm">
+            <span className="text-lg" aria-hidden="true">📦</span>
+            <span>
+              <AnimatedCounter target={totalSoldBooks} /> livres vendus
+            </span>
+          </div>
           <span className="flag-chip">
-            <span className="h-2 w-2 rounded-full bg-guinea-600" />
-              Paiement sécurisé
+            <span className="flex items-center gap-1" aria-hidden="true">
+              <span className="h-2 w-2 rounded-full bg-brand-500" />
+              <span className="h-2 w-2 rounded-full bg-accent-500" />
+              <span className="h-2 w-2 rounded-full bg-guinea-500" />
+            </span>
+            Paiement sécurisé
           </span>
         </div>
       </div>
-      <div className="card-surface p-5">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-brand-600">
+
+      {/* Reviews card */}
+      <div className="card-surface p-6">
+        <p className="mb-4 text-xs font-semibold uppercase tracking-[0.22em] text-brand-500">
           Avis clients
         </p>
         <div className="space-y-3">
-          {CUSTOMER_REVIEWS.map((review) => (
+          {CUSTOMER_REVIEWS.map((review, index) => (
             <article
               key={review.id}
-              className="rounded-xl border border-slate-200 bg-gradient-to-r from-white via-accent-100/40 to-white p-3"
+              className="group rounded-xl border border-slate-100/80 bg-gradient-to-r from-white via-accent-50/40 to-white p-4 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
+              style={{ animationDelay: `${index * 150}ms` }}
             >
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-slate-800">{review.name}</p>
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-brand-100 to-accent-100 text-xs font-bold text-brand-700">
+                    {review.name.charAt(0)}
+                  </div>
+                  <p className="text-sm font-semibold text-slate-800">{review.name}</p>
+                </div>
                 <RatingStars value={review.rating} />
               </div>
-              <p className="mt-1 text-sm text-slate-600">{review.text}</p>
+              <p className="mt-2 text-sm leading-relaxed text-slate-600">{review.text}</p>
             </article>
           ))}
         </div>
