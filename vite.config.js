@@ -1,42 +1,10 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import { VitePWA } from "vite-plugin-pwa";
 import Sitemap from "vite-plugin-sitemap";
 
 export default defineConfig({
   plugins: [
     react(),
-    VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'robots.txt', 'apple-touch-icon.png'],
-      strategies: 'generateSW',
-      globPatterns: ['**/*.{js,css,html,png,svg,ico}'],
-      manifest: {
-        name: 'Librairie YO',
-        short_name: 'LibYO',
-        description: 'Librairie digitale en Guinea',
-        theme_color: '#1e40af',
-        background_color: '#ffffff',
-        display: 'standalone',
-        orientation: 'portrait',
-        dir: 'ltr',
-        categories: ['books', 'shopping', 'lifestyle'],
-        id: '/',
-        start_url: '/',
-        icons: [
-          {
-            src: 'pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png'
-          }
-        ]
-      }
-    }),
     Sitemap({
       hostname: 'https://librairie-yo.vercel.app',
       dynamicRoutes: [
