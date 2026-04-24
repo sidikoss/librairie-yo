@@ -16,6 +16,9 @@ export default defineConfig({
         theme_color: '#1e40af',
         background_color: '#ffffff',
         display: 'standalone',
+        orientation: 'portrait',
+        id: '/?source=pwa',
+        start_url: '/?source=pwa',
         icons: [
           {
             src: 'pwa-192x192.png',
@@ -26,6 +29,20 @@ export default defineConfig({
             src: 'pwa-512x512.png',
             sizes: '512x512',
             type: 'image/png'
+          }
+        ],
+        screenshots: [
+          {
+            src: 'og-image.png',
+            sizes: '1200x630',
+            type: 'image/png',
+            form_factor: 'wide'
+          },
+          {
+            src: 'og-image.png',
+            sizes: '1200x630',
+            type: 'image/png',
+            form_factor: 'narrow'
           }
         ]
       }
