@@ -4,6 +4,8 @@ import BookGrid from "../components/books/BookGrid";
 import CustomerTrustSection from "../components/home/CustomerTrustSection";
 import HeroSection from "../components/home/HeroSection";
 import SectionHeader from "../components/ui/SectionHeader";
+import BookSkeleton from "../components/ui/BookSkeleton";
+import SEO from "../components/seo/SEO";
 import { useCart } from "../context/CartContext";
 import { useCatalog } from "../context/CatalogContext";
 
@@ -25,6 +27,10 @@ export default function HomePage() {
 
   return (
     <div className="space-y-10">
+      <SEO 
+        title="Accueil" 
+        description="Achetez vos livres rapidement en Guinée avec paiement Orange Money, PayCard et livraison. Catalogue mobile et complet." 
+      />
       <HeroSection />
 
       {error ? (
@@ -44,14 +50,8 @@ export default function HomePage() {
           description="Sélection basée sur les commandes validées."
         />
         {loading ? (
-          <div className="card-surface p-8 text-center">
-            <div className="inline-flex items-center gap-3 text-sm text-slate-500">
-              <svg className="h-5 w-5 animate-spin text-brand-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-              Chargement du catalogue...
-            </div>
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+            {[...Array(4)].map((_, i) => <BookSkeleton key={i} />)}
           </div>
         ) : (
           <BookGrid

@@ -1,0 +1,41 @@
+import { Helmet } from "react-helmet-async";
+import { APP_NAME } from "../../config/constants";
+
+export default function SEO({ 
+  title, 
+  description, 
+  keywords, 
+  image = "/og-image.png", 
+  url = "https://librairie-yo.vercel.app" 
+}) {
+  const fullTitle = title ? `${title} | ${APP_NAME}` : APP_NAME;
+  const defaultDescription = "Librairie digitale en Guinée. Achetez des livres de qualité avec paiement Orange Money, PayCard et livraison rapide.";
+  const metaDescription = description || defaultDescription;
+
+  return (
+    <Helmet>
+      {/* Primary Meta Tags */}
+      <title>{fullTitle}</title>
+      <meta name="title" content={fullTitle} />
+      <meta name="description" content={metaDescription} />
+      {keywords && <meta name="keywords" content={keywords} />}
+
+      {/* Open Graph / Facebook */}
+      <meta property="og:type" content="website" />
+      <meta property="og:url" content={url} />
+      <meta property="og:title" content={fullTitle} />
+      <meta property="og:description" content={metaDescription} />
+      <meta property="og:image" content={image} />
+
+      {/* Twitter */}
+      <meta property="twitter:card" content="summary_large_image" />
+      <meta property="twitter:url" content={url} />
+      <meta property="twitter:title" content={fullTitle} />
+      <meta property="twitter:description" content={metaDescription} />
+      <meta property="twitter:image" content={image} />
+      
+      {/* Mobile & PWA tags */}
+      <meta name="theme-color" content="#1e40af" />
+    </Helmet>
+  );
+}

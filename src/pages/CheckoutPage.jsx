@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import SectionHeader from "../components/ui/SectionHeader";
+import SEO from "../components/seo/SEO";
 import { useCart } from "../context/CartContext";
 import { useCatalog } from "../context/CatalogContext";
 import { validateCheckoutForm } from "../features/checkout/checkoutValidation";
@@ -122,6 +123,10 @@ export default function CheckoutPage() {
 
   return (
     <div className="space-y-6">
+      <SEO 
+        title="Finaliser la commande" 
+        description="Paiement sécurisé via Orange Money ou PayCard pour vos livres sur Librairie YO." 
+      />
       <SectionHeader eyebrow="Checkout" title="Paiement Sécurisé" description="Réglez facilement par carte bancaire ou Mobile Money via PayCard." />
 
       {successPayload ? (

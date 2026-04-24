@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import SectionHeader from "../components/ui/SectionHeader";
+import SEO from "../components/seo/SEO";
 import { WA_NUMBER } from "../config/constants";
 import { useCatalog } from "../context/CatalogContext";
 import { formatGNF } from "../utils/format";
@@ -52,6 +53,10 @@ export default function OrdersPage() {
 
   return (
     <div className="space-y-6">
+      <SEO 
+        title="Suivi de commande" 
+        description="Suivez l'état de votre commande Librairie YO et accédez à vos livres numériques." 
+      />
       <SectionHeader eyebrow="Commandes" title="Suivre mes commandes" description="Entrez votre téléphone et votre PIN pour vérifier vos achats." />
 
       <section className="card-surface p-5 animate-fade-in">

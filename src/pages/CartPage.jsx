@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import SectionHeader from "../components/ui/SectionHeader";
+import SEO from "../components/seo/SEO";
 import { useCart } from "../context/CartContext";
 import { formatGNF } from "../utils/format";
 
@@ -33,6 +34,10 @@ export default function CartPage() {
 
   return (
     <div className="space-y-6">
+      <SEO 
+        title="Mon Panier" 
+        description="Consultez les livres dans votre panier et finalisez votre commande." 
+      />
       <SectionHeader
         eyebrow="Panier"
         title="Finalisez votre commande"

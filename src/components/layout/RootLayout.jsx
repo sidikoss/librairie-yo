@@ -3,6 +3,7 @@ import Navbar from "./Navbar";
 import Footer from "./Footer";
 import ScrollToTop from "./ScrollToTop";
 import MobileWhatsAppFab from "./MobileWhatsAppFab";
+import { Analytics } from "@vercel/analytics/react";
 
 export default function RootLayout() {
   return (
@@ -24,6 +25,7 @@ export default function RootLayout() {
       </main>
       <Footer />
       <MobileWhatsAppFab />
+      <Analytics />
     </div>
   );
 }
