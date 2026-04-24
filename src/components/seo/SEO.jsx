@@ -16,6 +16,7 @@ export default function SEO({
     <Helmet>
       {/* Primary Meta Tags */}
       <title>{fullTitle}</title>
+      <link rel="canonical" href={url} />
       <meta name="title" content={fullTitle} />
       <meta name="description" content={metaDescription} />
       {keywords && <meta name="keywords" content={keywords} />}
@@ -26,6 +27,8 @@ export default function SEO({
       <meta property="og:title" content={fullTitle} />
       <meta property="og:description" content={metaDescription} />
       <meta property="og:image" content={image} />
+      <meta property="og:locale" content="fr_GN" />
+      <meta property="og:site_name" content={APP_NAME} />
 
       {/* Twitter */}
       <meta property="twitter:card" content="summary_large_image" />
