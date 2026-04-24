@@ -70,25 +70,13 @@ function compareSafe(a, b) {
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
 
+  // Health check
   if (req.method === "GET") {
-    const cookies = Object.fromEntries(
-      String(req.headers.cookie || "")
-        .split(";")
-        .map((v) => v.split("=").map(decodeURIComponent).map((s) => s.trim()))
-    );
-    if (verifyAdminToken(cookies.adminToken)) {
-      return res.status(200).json({ ok: true });
-    }
-    return res.status(401).json({ ok: false });
-  }
-
-  if (req.method === "DELETE") {
-    res.setHeader("Set-Cookie", "adminToken=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0");
-    return res.status(200).json({ ok: true });
+    return res.status(200).json({ ok: true, service: "admin-auth" });
   }
 
   if (req.method !== "POST") {
-    res.setHeader("Allow", "GET, POST, DELETE");
+    res.setHeader("Allow", "GET, POST");
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
@@ -119,9 +107,5 @@ export default async function handler(req, res) {
   }
 
   const token = signToken(secret);
-  res.setHeader(
-    "Set-Cookie",
-    `adminToken=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${SESSION_DURATION_MS / 1000}`
-  );
-  return res.status(200).json({ ok: true });
+  return res.status(200).json({ ok: true, token });
 }

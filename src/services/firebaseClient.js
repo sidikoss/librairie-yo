@@ -1,6 +1,5 @@
 import { getApp, getApps, initializeApp } from "firebase/app";
 import { getAuth, signInAnonymously } from "firebase/auth";
-import { getDatabase } from "firebase/database";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
@@ -51,5 +50,3 @@ export async function ensureReaderSession() {
     token,
   };
 }
-
-export const database = getDatabase(getFirebaseApp());

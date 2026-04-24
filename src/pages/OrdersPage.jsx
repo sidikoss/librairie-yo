@@ -21,17 +21,6 @@ function StatusBadge({ status }) {
   );
 }
 
-function RelativeTime({ timestamp }) {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const i = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(i);
-  }, []);
-  const diff = Math.floor((now - timestamp) / 1000);
-  if (!timestamp) return null;
-  return <span className="text-[10px] text-slate-400">Mis à jour il y a {diff}s</span>;
-}
-
 export default function OrdersPage() {
   const navigate = useNavigate();
   const { findOrdersByPhoneAndPin } = useCatalog();
@@ -41,35 +30,16 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [openingBookId, setOpeningBookId] = useState("");
-  const [lastSync, setLastSync] = useState(0);
 
-  const handleSearch = async (isAuto = false) => {
-    if (!isAuto) setFeedback("");
-    if (!isAuto) setLoading(true);
+  const handleSearch = async () => {
+    setFeedback("");
+    setLoading(true);
     try {
       const found = await findOrdersByPhoneAndPin(phone, pin);
       setOrders(found);
-      setLastSync(Date.now());
-      if (!found.length && !isAuto) setFeedback("Aucune commande trouvée avec ces identifiants.");
-    } finally { 
-      if (!isAuto) setLoading(false); 
-    }
+      if (!found.length) setFeedback("Aucune commande trouvée avec ces identifiants.");
+    } finally { setLoading(false); }
   };
-
-  // Polling automatique si des commandes sont affichées
-  useEffect(() => {
-    if (!orders || orders.length === 0) return;
-    
-    // Vérifier si au moins une commande est en attente
-    const hasPending = orders.some(o => o.status === "pending");
-    if (!hasPending) return;
-
-    const interval = setInterval(() => {
-      handleSearch(true);
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, [orders, phone, pin]);
 
   const openReader = (order, item) => {
     const orderId = String(order?.fbKey || "").trim();
@@ -90,17 +60,14 @@ export default function OrdersPage() {
       <SectionHeader eyebrow="Commandes" title="Suivre mes commandes" description="Entrez votre téléphone et votre PIN pour vérifier vos achats." />
 
       <section className="card-surface p-5 animate-fade-in">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-            <p className="text-xs font-bold uppercase tracking-widest text-brand-500">Recherche</p>
-          </div>
-          <RelativeTime timestamp={lastSync} />
+        <div className="mb-3 flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+          <p className="text-xs font-bold uppercase tracking-widest text-brand-500">Recherche</p>
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
           <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+224..." className="input-premium w-full" />
           <input type="password" maxLength={4} value={pin} onChange={(e) => setPin(e.target.value.replace(/[^\d]/g, ""))} placeholder="PIN (4 chiffres)" className="input-premium w-full" />
-          <button onClick={() => handleSearch(false)} disabled={loading} className="rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-brand-200/30 transition-all hover:-translate-y-0.5 disabled:opacity-60">
+          <button onClick={handleSearch} disabled={loading} className="rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-brand-200/30 transition-all hover:-translate-y-0.5 disabled:opacity-60">
             {loading ? "Recherche..." : "Afficher"}
           </button>
         </div>

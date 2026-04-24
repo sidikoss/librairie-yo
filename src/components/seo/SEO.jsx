@@ -6,8 +6,7 @@ export default function SEO({
   description, 
   keywords, 
   image = "/og-image.png", 
-  url = "https://librairie-yo.vercel.app",
-  noIndex = false
+  url = "https://librairie-yo.vercel.app" 
 }) {
   const fullTitle = title ? `${title} | ${APP_NAME}` : APP_NAME;
   const defaultDescription = "Librairie digitale en Guinée. Achetez des livres de qualité avec paiement Orange Money, PayCard et livraison rapide.";
@@ -17,11 +16,9 @@ export default function SEO({
     <Helmet>
       {/* Primary Meta Tags */}
       <title>{fullTitle}</title>
-      <link rel="canonical" href={url} />
       <meta name="title" content={fullTitle} />
       <meta name="description" content={metaDescription} />
       {keywords && <meta name="keywords" content={keywords} />}
-      {noIndex && <meta name="robots" content="noindex, nofollow" />}
 
       {/* Open Graph / Facebook */}
       <meta property="og:type" content="website" />
@@ -29,8 +26,6 @@ export default function SEO({
       <meta property="og:title" content={fullTitle} />
       <meta property="og:description" content={metaDescription} />
       <meta property="og:image" content={image} />
-      <meta property="og:locale" content="fr_GN" />
-      <meta property="og:site_name" content={APP_NAME} />
 
       {/* Twitter */}
       <meta property="twitter:card" content="summary_large_image" />

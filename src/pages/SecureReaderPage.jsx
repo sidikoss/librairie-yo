@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
+import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
+import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import SectionHeader from "../components/ui/SectionHeader";
 import { ensureReaderSession, isFirebaseReaderConfigured } from "../services/firebaseClient";
 
-
+GlobalWorkerOptions.workerSrc = pdfWorker;
 
 function normalizeDigits(value) {
   return String(value || "").replace(/[^\d]/g, "");
@@ -66,8 +68,6 @@ export default function SecureReaderPage() {
 
   const [pdfDoc, setPdfDoc] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageInput, setPageInput] = useState("1");
-  const [scale, setScale] = useState(1.5);
   const [loading, setLoading] = useState(true);
   const [rendering, setRendering] = useState(false);
   const [error, setError] = useState("");
@@ -76,26 +76,6 @@ export default function SecureReaderPage() {
   const totalPages = pdfDoc?.numPages || 0;
   const canGoPrev = currentPage > 1;
   const canGoNext = currentPage < totalPages;
-
-  // Restore last page from session
-  useEffect(() => {
-    if (!bookId) return;
-    const saved = sessionStorage.getItem(`reader_last_page_${bookId}`);
-    if (saved) {
-      const p = Number(saved);
-      if (!isNaN(p) && p > 0) {
-        setCurrentPage(p);
-        setPageInput(saved);
-      }
-    }
-  }, [bookId]);
-
-  // Persist current page
-  useEffect(() => {
-    if (!bookId || !currentPage) return;
-    sessionStorage.setItem(`reader_last_page_${bookId}`, String(currentPage));
-    setPageInput(String(currentPage));
-  }, [bookId, currentPage]);
 
   const renderPage = useCallback(
     async (pageNumber) => {
@@ -112,12 +92,8 @@ export default function SecureReaderPage() {
 
         const containerWidth = frameRef.current?.clientWidth || 920;
         const baseViewport = page.getViewport({ scale: 1 });
-        
-        // Responsive scale combined with user scale
-        const responsiveBase = Math.min(2.4, Math.max(0.4, containerWidth / baseViewport.width));
-        const finalScale = responsiveBase * (scale / 1.5); 
-        
-        const viewport = page.getViewport({ scale: finalScale });
+        const responsiveScale = Math.min(2.4, Math.max(0.65, containerWidth / baseViewport.width));
+        const viewport = page.getViewport({ scale: responsiveScale });
 
         canvas.width = Math.floor(viewport.width);
         canvas.height = Math.floor(viewport.height);
@@ -133,13 +109,13 @@ export default function SecureReaderPage() {
         setRendering(false);
       }
     },
-    [pdfDoc, watermark, scale],
+    [pdfDoc, watermark],
   );
 
   useEffect(() => {
     if (!pdfDoc) return;
     renderPage(currentPage);
-  }, [pdfDoc, currentPage, renderPage, scale]);
+  }, [pdfDoc, currentPage, renderPage]);
 
   useEffect(() => {
     const onContextMenu = (event) => event.preventDefault();
@@ -204,10 +180,6 @@ export default function SecureReaderPage() {
         const pdfBuffer = await response.arrayBuffer();
         if (cancelled) return;
 
-        const { getDocument, GlobalWorkerOptions } = await import("pdfjs-dist");
-        const pdfWorker = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
-        GlobalWorkerOptions.workerSrc = pdfWorker.default;
-
         const loadingTask = getDocument({
           data: pdfBuffer,
           disableAutoFetch: true,
@@ -221,7 +193,7 @@ export default function SecureReaderPage() {
         }
 
         setPdfDoc(loadedDoc);
-        // Page initialization is handled by Restore effect above
+        setCurrentPage(1);
         setWatermark(
           buildWatermarkLabel({
             title,
@@ -249,23 +221,12 @@ export default function SecureReaderPage() {
     };
   }, [orderId, bookId, title, fallbackPhone, fallbackPin]);
 
-  const goToPage = (p) => {
-    const num = parseInt(p, 10);
-    if (!isNaN(num) && num >= 1 && num <= totalPages) {
-      setCurrentPage(num);
-    } else {
-      setPageInput(String(currentPage));
-    }
-  };
-
   const statusLabel = useMemo(() => {
-    if (loading) return "Chargement sécurisé...";
-    if (rendering) return "Rendu...";
+    if (loading) return "Chargement sécurisé en cours...";
+    if (rendering) return "Rendu de la page...";
     if (error) return error;
-    return `Page ${currentPage} sur ${totalPages}`;
+    return `Page ${currentPage}/${totalPages}`;
   }, [loading, rendering, error, currentPage, totalPages]);
-
-  const progressPercent = totalPages > 0 ? (currentPage / totalPages) * 100 : 0;
 
   return (
     <div className="space-y-5">
@@ -276,98 +237,47 @@ export default function SecureReaderPage() {
       />
 
       <section className="card-surface space-y-4 p-4">
-        {/* Barre de progression */}
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-          <div 
-            className="h-full bg-brand-600 transition-all duration-300"
-            style={{ width: `${progressPercent}%` }}
-          />
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <p className="text-sm font-medium text-slate-600">{statusLabel}</p>
-          
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Aller à la page */}
-            <div className="flex items-center gap-2 rounded-lg border border-slate-200 px-2 py-1">
-              <span className="text-xs text-slate-400">Aller à:</span>
-              <input 
-                type="text"
-                value={pageInput}
-                onChange={(e) => setPageInput(e.target.value.replace(/\D/g, ""))}
-                onBlur={() => goToPage(pageInput)}
-                onKeyDown={(e) => e.key === "Enter" && goToPage(pageInput)}
-                className="w-10 bg-transparent text-center text-sm font-bold text-slate-700 outline-none"
-              />
-            </div>
-
-            {/* Zoom */}
-            <div className="flex items-center gap-1 rounded-lg border border-slate-200 p-1">
-              <button 
-                onClick={() => setScale(s => Math.max(0.5, s - 0.2))}
-                className="flex h-7 w-7 items-center justify-center rounded-md hover:bg-slate-100"
-                title="Zoom arrière"
-              >
-                <span className="text-lg">−</span>
-              </button>
-              <span className="min-w-[40px] text-center text-[10px] font-bold text-slate-500">
-                {Math.round((scale / 1.5) * 100)}%
-              </span>
-              <button 
-                onClick={() => setScale(s => Math.min(3, s + 0.2))}
-                className="flex h-7 w-7 items-center justify-center rounded-md hover:bg-slate-100"
-                title="Zoom avant"
-              >
-                <span className="text-lg">+</span>
-              </button>
-            </div>
-
-            <div className="flex gap-2 border-l border-slate-200 pl-3">
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={!canGoPrev || loading || Boolean(error)}
-                className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-40"
-              >
-                Précédent
-              </button>
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                disabled={!canGoNext || loading || Boolean(error)}
-                className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-40"
-              >
-                Suivant
-              </button>
-            </div>
-            
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-slate-600">{statusLabel}</p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+              disabled={!canGoPrev || loading || Boolean(error)}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-40"
+            >
+              Page precedente
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={!canGoNext || loading || Boolean(error)}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-40"
+            >
+              Page suivante
+            </button>
             <Link
               to="/commandes"
-              className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-brand-700"
+              className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white"
             >
-              Quitter
+              Retour commandes
             </Link>
           </div>
         </div>
 
         {error ? (
-          <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+          <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
             {error}
           </div>
         ) : null}
 
         <div
           ref={frameRef}
-          className="relative min-h-[400px] overflow-auto rounded-xl border border-slate-200 bg-slate-100 p-4"
+          className="overflow-auto rounded-xl border border-slate-200 bg-slate-100 p-2"
         >
-          {loading && (
-             <div className="absolute inset-0 flex items-center justify-center bg-slate-100/50">
-                <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600"></div>
-             </div>
-          )}
           <canvas
             ref={canvasRef}
-            className="mx-auto block max-w-full rounded-md bg-white shadow-lg transition-transform duration-200"
+            className="mx-auto block max-w-full rounded-md bg-white shadow-sm"
           />
         </div>
       </section>

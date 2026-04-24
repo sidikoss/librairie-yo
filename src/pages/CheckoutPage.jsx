@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import SectionHeader from "../components/ui/SectionHeader";
 import SEO from "../components/seo/SEO";
 import { useCart } from "../context/CartContext";
@@ -9,120 +9,26 @@ import { buildCartWhatsAppUrl } from "../features/whatsapp/whatsapp";
 import { ensureReaderSession } from "../services/firebaseClient";
 import { formatGNF, normalizePhone } from "../utils/format";
 
+function resolvePromo(promoCodes, code, subTotal) {
+  const c = String(code || "").trim().toUpperCase();
+  if (!c) return { promo: null, discount: 0 };
+  const m = promoCodes.find((p) => p.code === c && p.active !== false);
+  if (!m) return { promo: null, discount: 0 };
+  const d = m.type === "percent" ? Math.round(subTotal * (Number(m.discount || 0) / 100)) : Number(m.discount || 0);
+  return { promo: m, discount: Math.max(0, d) };
+}
+
 export default function CheckoutPage() {
   const { items, total, clearCart } = useCart();
-  const { submitOrder } = useCatalog();
-  const location = useLocation();
-
+  const { submitOrder, promoCodes } = useCatalog();
   const [form, setForm] = useState({ name: "", phone: "", pin: "", promoCode: "" });
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [successPayload, setSuccessPayload] = useState(null);
   const [paymentError, setPaymentError] = useState("");
-  
-  const [promo, setPromo] = useState(null);
-  const [discount, setDiscount] = useState(0);
-  const [validatingPromo, setValidatingPromo] = useState(false);
-  const [verifyingPayment, setVerifyingPayment] = useState(false);
 
+  const { promo, discount } = useMemo(() => resolvePromo(promoCodes, form.promoCode, total), [promoCodes, form.promoCode, total]);
   const finalTotal = Math.max(0, total - discount);
-
-  // Vérification de retour de paiement (PayCard)
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    if (params.get("payment_return") === "true") {
-      setVerifyingPayment(true);
-      const orderId = params.get("orderId") || sessionStorage.getItem("pendingOrderId");
-      const transactionId = params.get("tx_id") || params.get("transaction_id");
-      
-      fetch("/api/paycard-verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId, transactionId })
-      })
-      .then(r => r.json())
-      .then(async data => {
-        if (data.valid && data.status === "SUCCESS") {
-           // Création effective de la commande APRÈS le paiement
-           const pendingCart = JSON.parse(sessionStorage.getItem("pendingCart") || "[]");
-           const pendingForm = JSON.parse(sessionStorage.getItem("pendingForm") || "{}");
-           const pendingDiscount = Number(sessionStorage.getItem("pendingDiscount") || 0);
-           const pendingTotal = Number(sessionStorage.getItem("pendingTotal") || 0);
-           const pendingPromo = sessionStorage.getItem("pendingPromo");
-           const pendingUid = sessionStorage.getItem("pendingUid");
-           const refPaiement = transactionId || orderId;
-
-           if (pendingCart.length > 0) {
-              const orderPayload = {
-                name: pendingForm.name,
-                phone: pendingForm.phone,
-                uid: pendingUid || null,
-                txId: transactionId || orderId,
-                referencePaiement: refPaiement,
-                pin: pendingForm.pin,
-                originalTotal: pendingTotal + pendingDiscount,
-                discount: pendingDiscount,
-                total: pendingTotal,
-                promoCode: pendingPromo || null,
-                status: "approved", // Approuvée directement car on a vérifié le statut
-                items: pendingCart
-              };
-              const createdOrderId = await submitOrder(orderPayload);
-              setSuccessPayload({ orderId: createdOrderId || orderId, pin: pendingForm.pin, phone: pendingForm.phone });
-              clearCart();
-              sessionStorage.removeItem("pendingCart");
-           }
-        } else {
-           setPaymentError("Le paiement a échoué ou n'a pas pu être validé.");
-        }
-      })
-      .catch(() => setPaymentError("Erreur lors de la vérification du paiement."))
-      .finally(() => setVerifyingPayment(false));
-    }
-  }, [location, submitOrder, clearCart]);
-
-  const chg = (f, v) => { setForm((p) => ({ ...p, [f]: v })); setErrors((p) => ({ ...p, [f]: "" })); setPaymentError(""); };
-
-  const validatePromoCode = async () => {
-    setErrors((p) => ({ ...p, promoCode: "" }));
-    if (!form.promoCode.trim()) {
-       setPromo(null);
-       setDiscount(0);
-       return;
-    }
-    setValidatingPromo(true);
-    try {
-      const res = await fetch("/api/validate-promo", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: form.promoCode.trim() })
-      });
-      const data = await res.json();
-      if (res.ok && data.valid) {
-         setPromo({ code: form.promoCode.trim().toUpperCase(), type: data.type, discount: data.discount });
-         const d = data.type === "percent" ? Math.round(total * (Number(data.discount) / 100)) : Number(data.discount);
-         setDiscount(Math.max(0, d));
-      } else {
-         setPromo(null);
-         setDiscount(0);
-         setErrors(p => ({ ...p, promoCode: data.error || "Code invalide" }));
-      }
-    } catch {
-       setErrors(p => ({ ...p, promoCode: "Erreur de validation" }));
-    } finally {
-       setValidatingPromo(false);
-    }
-  };
-
-  if (verifyingPayment) {
-    return (
-      <div className="flex flex-col items-center justify-center space-y-4 py-20">
-        <div className="h-12 w-12 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600"></div>
-        <p className="font-heading text-lg font-bold text-slate-800">Vérification de votre paiement...</p>
-        <p className="text-sm text-slate-500">Merci de patienter quelques instants.</p>
-      </div>
-    );
-  }
 
   if (!items.length && !successPayload) {
     return (
@@ -139,6 +45,8 @@ export default function CheckoutPage() {
     );
   }
 
+  const chg = (f, v) => { setForm((p) => ({ ...p, [f]: v })); setErrors((p) => ({ ...p, [f]: "" })); setPaymentError(""); };
+
   const launchWA = () => {
     const e = validateCheckoutForm({ ...form, txId: "WHATSAPP", mode: "whatsapp" });
     if (Object.keys(e).length) { setErrors(e); return; }
@@ -154,19 +62,25 @@ export default function CheckoutPage() {
       let uid = "";
       try { const s = await ensureReaderSession(); uid = s?.uid || ""; } catch {}
       
-      const orderId = `TEMP_${Date.now()}`;
+      // 1. Sauvegarder la commande en 'pending'
+      const orderPayload = {
+        name: form.name.trim(),
+        phone: normalizePhone(form.phone),
+        uid: uid || null,
+        txId: "PENDING_PAYCARD", // Sera mis à jour par le webhook
+        referencePaiement: "PENDING_PAYCARD",
+        pin: form.pin.trim(),
+        originalTotal: total,
+        discount,
+        total: finalTotal,
+        promoCode: promo?.code || null,
+        status: "pending", // Force pending status
+        items: items.map((i) => ({ bookId: i.bookId, fbKey: i.bookId, title: i.title, qty: 1, price: Number(i.unitPrice || 0) }))
+      };
       
-      // Stocker les infos dans sessionStorage (on NE CREE PAS la commande dans Firebase)
-      const pendingItems = items.map((i) => ({ bookId: i.bookId, fbKey: i.bookId, title: i.title, qty: 1, price: Number(i.unitPrice || 0) }));
-      sessionStorage.setItem("pendingOrderId", orderId);
-      sessionStorage.setItem("pendingCart", JSON.stringify(pendingItems));
-      sessionStorage.setItem("pendingForm", JSON.stringify({ name: form.name.trim(), phone: normalizePhone(form.phone), pin: form.pin.trim() }));
-      sessionStorage.setItem("pendingTotal", finalTotal);
-      sessionStorage.setItem("pendingDiscount", discount);
-      sessionStorage.setItem("pendingPromo", promo?.code || "");
-      sessionStorage.setItem("pendingUid", uid || "");
+      const orderId = await submitOrder(orderPayload);
       
-      // 2. Initialiser le paiement PayCard
+      // 2. Initialiser le paiement PayCard via notre API backend
       const response = await fetch('/api/paycard-init', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -175,7 +89,7 @@ export default function CheckoutPage() {
           amount: finalTotal,
           phone: normalizePhone(form.phone),
           name: form.name.trim(),
-          description: `Paiement Librairie YO`
+          description: `Paiement Librairie YO - Commande ${orderId}`
         })
       });
 
@@ -185,11 +99,16 @@ export default function CheckoutPage() {
         throw new Error(data.error || "Erreur lors de l'initialisation du paiement PayCard.");
       }
 
-      // 3. Redirection
+      // 3. Rediriger l'utilisateur vers la page de paiement PayCard
       if (data.paymentUrl) {
+        // Sauvegarder les infos pour l'écran de retour
+        sessionStorage.setItem("pendingOrderPin", form.pin.trim());
+        sessionStorage.setItem("pendingOrderPhone", normalizePhone(form.phone));
+        sessionStorage.setItem("pendingOrderId", orderId);
+        
         window.location.href = data.paymentUrl;
       } else {
-        // Fallback simulation
+        // Fallback simulation (si l'API PayCard n'est pas configurée)
         setSuccessPayload({ orderId, pin: form.pin.trim(), phone: normalizePhone(form.phone) });
         clearCart();
       }
@@ -284,14 +203,8 @@ export default function CheckoutPage() {
               <div className="space-y-2">{items.map((item, i) => (<div key={item.bookId} className="flex items-start justify-between gap-3 rounded-lg p-2.5 text-sm hover:bg-slate-50"><div className="flex items-center gap-2.5"><span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md bg-brand-50 text-[10px] font-bold text-brand-600">{i + 1}</span><p className="text-slate-700">{item.title}</p></div><p className="flex-shrink-0 font-bold text-slate-900">{formatGNF(Number(item.unitPrice || 0))}</p></div>))}</div>
               <div className="mt-5 border-t border-slate-100 pt-5">
                 <label className="text-xs font-bold uppercase tracking-widest text-slate-400">Code promo</label>
-                <div className="mt-2 flex gap-2">
-                  <input value={form.promoCode} onChange={(e) => chg("promoCode", e.target.value.toUpperCase())} placeholder="Ex: YO20" className="input-premium flex-1" />
-                  <button onClick={validatePromoCode} disabled={validatingPromo} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
-                    {validatingPromo ? "..." : "Appliquer"}
-                  </button>
-                </div>
-                {errors.promoCode && <p className="mt-2 text-xs text-brand-500">{errors.promoCode}</p>}
-                {promo && !errors.promoCode && <p className="mt-2 text-xs font-semibold text-guinea-600 animate-fade-in">✓ {promo.code} appliqué ({promo.type === "percent" ? `${promo.discount}%` : formatGNF(promo.discount)})</p>}
+                <input value={form.promoCode} onChange={(e) => chg("promoCode", e.target.value.toUpperCase())} placeholder="Ex: YO20" className="input-premium mt-2 w-full" />
+                {promo ? <p className="mt-2 text-xs font-semibold text-guinea-600 animate-fade-in">✓ {promo.code} ({promo.type === "percent" ? `${promo.discount}%` : formatGNF(promo.discount)})</p> : form.promoCode ? <p className="mt-2 text-xs text-brand-500">Code invalide</p> : null}
               </div>
               <div className="mt-5 space-y-2.5 border-t border-slate-100 pt-5">
                 <div className="flex justify-between text-sm"><span className="text-slate-500">Sous-total</span><span className="font-semibold">{formatGNF(total)}</span></div>

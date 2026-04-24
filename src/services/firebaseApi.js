@@ -29,20 +29,23 @@ async function request(path, options = {}, timeoutMs = 10000) {
 
     const payload = await parseJsonSafe(response);
     if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
-        throw new Error("Accès refusé (Firebase Rules). Vérifiez l'authentification.");
+      const serverError =
+        typeof payload?.error === "string" ? payload.error : "Erreur inconnue";
+      const silentStatuses = Array.isArray(options.silentStatuses)
+        ? options.silentStatuses
+        : [];
+      if (!silentStatuses.includes(response.status)) {
+        console.warn(
+          `[Firebase] ${method} /${path} failed (${response.status}): ${serverError}`,
+        );
       }
-      const serverError = typeof payload?.error === "string" ? payload.error : `Erreur ${response.status}`;
-      throw new Error(serverError);
+      return null;
     }
 
     return payload;
   } catch (err) {
-    if (err.name === "AbortError") {
-      throw new Error("La requête a expiré (Délai dépassé).");
-    }
     console.error(`[Firebase] ${method} /${path}:`, err.message || err);
-    throw err;
+    return null;
   } finally {
     clearTimeout(timer);
   }
