@@ -1,3 +1,4 @@
+import { useState } from "react";
 import Badge from "../ui/Badge";
 import PriceTag from "../ui/PriceTag";
 import RatingStars from "../ui/RatingStars";
@@ -10,6 +11,16 @@ export default function BookCard({
   onToggleFavorite,
   isFavorite,
 }) {
+  const [isAdded, setIsAdded] = useState(false);
+
+  const handleAddToCart = () => {
+    onAddToCart(book);
+    setIsAdded(true);
+    setTimeout(() => {
+      setIsAdded(false);
+    }, 1500);
+  };
+
   return (
     <article
       className="group flex h-full flex-col overflow-hidden rounded-2xl border border-white/60 bg-white/90 shadow-sm backdrop-blur-sm transition-all duration-500 ease-out-expo hover:-translate-y-2 hover:shadow-card-hover"
@@ -99,11 +110,25 @@ export default function BookCard({
         {/* Add to cart button */}
         <div className="mt-auto">
           <button
-            onClick={() => onAddToCart(book)}
-            className="w-full rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 px-4 py-2.5 text-sm font-bold text-white shadow-md shadow-brand-200/30 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-brand-200/40"
+            onClick={handleAddToCart}
+            disabled={isAdded}
+            className={`w-full flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold shadow-md transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg ${
+              isAdded 
+                ? "bg-guinea-500 text-white shadow-guinea-200/40" 
+                : "bg-gradient-to-r from-brand-500 to-brand-600 text-white shadow-brand-200/30 hover:shadow-brand-200/40"
+            }`}
             aria-label={`Ajouter "${book.title}" au panier`}
           >
-            Ajouter au panier
+            {isAdded ? (
+              <>
+                <svg className="h-4 w-4 animate-bounce-in" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                Ajouté !
+              </>
+            ) : (
+              "Ajouter au panier"
+            )}
           </button>
         </div>
       </div>
