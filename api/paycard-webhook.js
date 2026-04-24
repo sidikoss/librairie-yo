@@ -1,22 +1,4 @@
-import admin from "firebase-admin";
-
-// Initialize Firebase Admin if not already initialized
-if (!admin.apps.length) {
-  try {
-    const serviceAccountStr = process.env.FIREBASE_SERVICE_ACCOUNT;
-    if (!serviceAccountStr) {
-      throw new Error("Missing FIREBASE_SERVICE_ACCOUNT");
-    }
-    const serviceAccount = JSON.parse(serviceAccountStr);
-    
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-      databaseURL: process.env.FIREBASE_DATABASE_URL || "https://librairie-yo-default-rtdb.firebaseio.com"
-    });
-  } catch (error) {
-    console.error("Firebase admin init error in webhook:", error);
-  }
-}
+import { getAdminDatabase } from "./_lib/firebaseAdmin.js";
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -26,35 +8,37 @@ export default async function handler(req, res) {
   try {
     const payload = req.body;
     
-    // (A AJUSTER) Logique de sécurité PayCard : 
-    // Vérification de la signature ou d'un token secret envoyé dans les headers
+    // Logique de sécurité PayCard : Vérification de la signature
     const WEBHOOK_SECRET = process.env.PAYCARD_WEBHOOK_SECRET;
-    const providedSignature = req.headers['x-paycard-signature']; // Nom du header à adapter
+    const providedSignature = req.headers['x-paycard-signature'];
 
     if (WEBHOOK_SECRET && providedSignature !== WEBHOOK_SECRET) {
-      console.error("Invalid webhook signature.");
+      console.error("Signature webhook invalide.");
       return res.status(401).json({ error: "Unauthorized" });
     }
 
     console.log("Webhook PayCard reçu:", payload);
 
-    // Extraction des données de la transaction (A AJUSTER selon la spec PayCard)
+    // Extraction des données de la transaction
     const orderId = payload.order_id || payload.custom_field;
-    const transactionStatus = payload.status; // ex: "SUCCESS", "FAILED"
+    const transactionStatus = payload.status;
     const referencePaiement = payload.transaction_id || payload.reference;
 
     if (!orderId) {
       return res.status(400).json({ error: "Missing order_id" });
     }
 
-    const db = admin.database();
+    const db = getAdminDatabase();
     const orderRef = db.ref(`orders/${orderId}`);
 
     const snapshot = await orderRef.once('value');
     const orderData = snapshot.val();
 
     if (!orderData) {
-      return res.status(404).json({ error: "Order not found" });
+      // Si la commande n'existe pas encore (créée par le frontend après retour), 
+      // on ne peut pas la mettre à jour ici. C'est normal avec le nouveau flux.
+      console.log(`Commande ${orderId} non trouvée dans Firebase. Le frontend la créera.`);
+      return res.status(200).json({ received: true, note: "Order not yet created" });
     }
 
     // Mise à jour du statut selon le retour de PayCard
@@ -62,20 +46,20 @@ export default async function handler(req, res) {
       await orderRef.update({
         status: "approved",
         referencePaiement: referencePaiement || orderData.referencePaiement,
-        updatedAt: admin.database.ServerValue.TIMESTAMP
+        updatedAt: Date.now()
       });
-      console.log(`Commande ${orderId} approuvée avec succès.`);
+      console.log(`Commande ${orderId} approuvée avec succès via webhook.`);
     } else if (transactionStatus === "FAILED" || transactionStatus === "CANCELLED") {
       await orderRef.update({
         status: "rejected",
-        updatedAt: admin.database.ServerValue.TIMESTAMP
+        updatedAt: Date.now()
       });
-      console.log(`Commande ${orderId} rejetée (Paiement échoué).`);
+      console.log(`Commande ${orderId} rejetée via webhook.`);
     }
 
     return res.status(200).json({ received: true });
   } catch (error) {
-    console.error("Webhook processing error:", error);
+    console.error("Erreur de traitement webhook:", error);
     return res.status(500).json({ error: "Internal Server Error" });
   }
 }

@@ -12,3 +12,30 @@ describe("extractPaymentReference", () => {
     expect(extractPaymentReference(sms)).toBe("A58452");
   });
 });
+
+import { validateCheckoutForm } from "../features/checkout/checkoutValidation";
+
+describe("validateCheckoutForm", () => {
+  it("should return errors for empty form", () => {
+    const errors = validateCheckoutForm({ name: "", phone: "" });
+    expect(errors.name).toBeDefined();
+    expect(errors.phone).toBeDefined();
+  });
+
+  it("should validate phone format", () => {
+    const errors = validateCheckoutForm({ name: "Mory", phone: "123" });
+    expect(errors.phone).toBeDefined();
+  });
+
+  it("should require PIN and reference for orange_money mode", () => {
+    const errors = validateCheckoutForm({ 
+      name: "Mory", 
+      phone: "+224611111111", 
+      mode: "orange_money",
+      txId: "",
+      pin: "" 
+    });
+    expect(errors.txId).toBeDefined();
+    expect(errors.pin).toBeDefined();
+  });
+});

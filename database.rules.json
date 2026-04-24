@@ -13,14 +13,14 @@
       ".write": false
     },
     "orders": {
-      ".read": true,
+      ".read": "auth != null",
       "$orderId": {
-        ".write": "!data.exists() && newData.hasChildren(['phone','items','status']) && newData.child('status').val() === 'pending'",
+        ".write": "!data.exists() && newData.hasChildren(['phone','items','status']) && newData.child('status').val() === 'pending' && (!newData.hasChild('uid') || newData.child('uid').val() === 'anonymous' || (auth != null && newData.child('uid').val() === auth.uid))",
         ".validate": "newData.hasChildren(['phone','items','status','createdAt'])"
       }
     },
     "promoCodes": {
-      ".read": true,
+      ".read": "auth != null",
       ".write": "auth != null"
     },
     "pending_orders": {

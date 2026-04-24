@@ -24,8 +24,11 @@ import {
   serializeBookToFirebase,
 } from "../features/catalog/bookModel";
 import { normalizePhone } from "../utils/format";
+import { database } from "../services/firebaseClient";
+import { ref, onValue } from "firebase/database";
 
-const CatalogContext = createContext(null);
+const CatalogDataContext = createContext(null);
+const CatalogActionsContext = createContext(null);
 
 function loadCachedBooks() {
   try {
@@ -93,6 +96,20 @@ export function CatalogProvider({ children }) {
     refreshCatalog();
   }, [refreshCatalog]);
 
+  // Real-time orders for Admin and Users
+  useEffect(() => {
+    const ordersRef = ref(database, "orders");
+    const unsubscribe = onValue(ordersRef, (snapshot) => {
+      const rawOrders = [];
+      snapshot.forEach((child) => {
+        rawOrders.push({ ...child.val(), fbKey: child.key });
+      });
+      // Sort by date descending
+      setOrders(rawOrders.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
+    });
+    return () => unsubscribe();
+  }, []);
+
   const favoriteBooks = useMemo(
     () => books.filter((book) => wishlistIds.includes(book.id)),
     [books, wishlistIds],
@@ -116,19 +133,19 @@ export function CatalogProvider({ children }) {
     [books],
   );
 
-  const toggleWishlist = (bookId) => {
+  const toggleWishlist = useCallback((bookId) => {
     setWishlistIds((prev) =>
       prev.includes(bookId)
         ? prev.filter((id) => id !== bookId)
         : [...prev, bookId],
     );
-  };
+  }, [setWishlistIds]);
 
-  const isFavorite = (bookId) => wishlistIds.includes(bookId);
+  const isFavorite = useCallback((bookId) => wishlistIds.includes(bookId), [wishlistIds]);
 
-  const getBookById = (bookId) => books.find((book) => book.id === bookId);
+  const getBookById = useCallback((bookId) => books.find((book) => book.id === bookId), [books]);
 
-  const upsertBook = async ({ draft, filePayload = null, bookId = null }) => {
+  const upsertBook = useCallback(async ({ draft, filePayload = null, bookId = null }) => {
     const currentBook = books.find((book) => book.id === bookId);
     const payload = serializeBookToFirebase(draft, currentBook);
 
@@ -145,14 +162,14 @@ export function CatalogProvider({ children }) {
 
     await refreshCatalog();
     return resolvedBookId;
-  };
+  }, [books, refreshCatalog]);
 
-  const removeBook = async (bookId) => {
+  const removeBook = useCallback(async (bookId) => {
     await deleteBook(bookId);
     await refreshCatalog();
-  };
+  }, [refreshCatalog]);
 
-  const submitOrder = async (orderDraft) => {
+  const submitOrder = useCallback(async (orderDraft) => {
     const payload = {
       ...orderDraft,
       phone: normalizePhone(orderDraft.phone),
@@ -163,9 +180,9 @@ export function CatalogProvider({ children }) {
     const response = await createOrder(payload);
     await refreshCatalog();
     return response?.name || null;
-  };
+  }, [refreshCatalog]);
 
-  const findOrdersByPhoneAndPin = async (phone, pin) => {
+  const findOrdersByPhoneAndPin = useCallback(async (phone, pin) => {
     const normalized = normalizePhone(phone);
     const refreshedOrders = await fetchOrders();
     setOrders(refreshedOrders);
@@ -173,18 +190,18 @@ export function CatalogProvider({ children }) {
     return refreshedOrders.filter(
       (order) => normalizePhone(order.phone) === normalized && String(order.pin) === String(pin),
     );
-  };
+  }, []);
 
-  const setOrderStatus = async (orderId, status) => {
+  const setOrderStatus = useCallback(async (orderId, status) => {
     await apiUpdateOrderStatus(orderId, status);
     await refreshCatalog();
-  };
+  }, [refreshCatalog]);
 
-  const getBookFile = async (bookId) => {
+  const getBookFile = useCallback(async (bookId) => {
     return fetchBookFile(bookId);
-  };
+  }, []);
 
-  const addPromo = async (promo) => {
+  const addPromo = useCallback(async (promo) => {
     await createPromoCode({
       code: promo.code.toUpperCase(),
       discount: Number(promo.discount || 0),
@@ -195,19 +212,19 @@ export function CatalogProvider({ children }) {
       createdAt: Date.now(),
     });
     await refreshCatalog();
-  };
+  }, [refreshCatalog]);
 
-  const togglePromo = async (promo) => {
+  const togglePromo = useCallback(async (promo) => {
     await togglePromoCode(promo);
     await refreshCatalog();
-  };
+  }, [refreshCatalog]);
 
-  const removePromo = async (promoId) => {
+  const removePromo = useCallback(async (promoId) => {
     await deletePromoCode(promoId);
     await refreshCatalog();
-  };
+  }, [refreshCatalog]);
 
-  const value = {
+  const dataValue = useMemo(() => ({
     books,
     orders,
     promoCodes,
@@ -221,10 +238,13 @@ export function CatalogProvider({ children }) {
     totalSoldBooks,
     popularBooks,
     newBooks,
-    refreshCatalog,
-    toggleWishlist,
     isFavorite,
     getBookById,
+  }), [books, orders, promoCodes, loading, syncing, error, lastSyncAt, wishlistIds, favoriteBooks, totalSoldBooks, popularBooks, newBooks, isFavorite, getBookById]);
+
+  const actionsValue = useMemo(() => ({
+    refreshCatalog,
+    toggleWishlist,
     upsertBook,
     removeBook,
     submitOrder,
@@ -234,16 +254,36 @@ export function CatalogProvider({ children }) {
     addPromo,
     togglePromo,
     removePromo,
-  };
+  }), [refreshCatalog, toggleWishlist, upsertBook, removeBook, submitOrder, findOrdersByPhoneAndPin, setOrderStatus, getBookFile, addPromo, togglePromo, removePromo]);
 
-  return <CatalogContext.Provider value={value}>{children}</CatalogContext.Provider>;
+  return (
+    <CatalogDataContext.Provider value={dataValue}>
+      <CatalogActionsContext.Provider value={actionsValue}>
+        {children}
+      </CatalogActionsContext.Provider>
+    </CatalogDataContext.Provider>
+  );
+}
+
+export function useCatalogData() {
+  const context = useContext(CatalogDataContext);
+  if (context === undefined) {
+    throw new Error("useCatalogData must be used within CatalogProvider");
+  }
+  return context;
+}
+
+export function useCatalogActions() {
+  const context = useContext(CatalogActionsContext);
+  if (context === undefined) {
+    throw new Error("useCatalogActions must be used within CatalogProvider");
+  }
+  return context;
 }
 
 export function useCatalog() {
-  const context = useContext(CatalogContext);
-  if (!context) {
-    throw new Error("useCatalog must be used within CatalogProvider");
-  }
-  return context;
+  const data = useCatalogData();
+  const actions = useCatalogActions();
+  return useMemo(() => ({ ...data, ...actions }), [data, actions]);
 }
 

@@ -92,6 +92,13 @@ export default defineConfig({
     chunkSizeWarningLimit: 500,
     cssCodeSplit: true,
     sourcemap: false,
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true,
+      },
+    },
     rollupOptions: {
       output: {
         manualChunks(id) {
@@ -100,6 +107,12 @@ export default defineConfig({
           }
           if (id.includes("node_modules/react-router-dom")) {
             return "vendor-router";
+          }
+          if (id.includes("node_modules/firebase")) {
+            return "vendor-firebase";
+          }
+          if (id.includes("node_modules/pdfjs-dist")) {
+            return "vendor-pdf";
           }
         },
       },

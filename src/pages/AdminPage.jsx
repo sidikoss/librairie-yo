@@ -1,14 +1,10 @@
 // src/pages/AdminPage.jsx
 // Auth déplacée côté serveur — le mot de passe n'est plus dans le bundle JS.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { STORAGE_KEYS } from "../config/constants";
 import { useCatalog } from "../context/CatalogContext";
 import { formatGNF } from "../utils/format";
-
-const SESSION_TTL = 2 * 60 * 60 * 1000; // 2 h (doit correspondre à l'API)
-
-const SESSION_KEY = STORAGE_KEYS.adminSession;
 
 const emptyBookDraft = {
   title: "",
@@ -25,28 +21,6 @@ const emptyBookDraft = {
   manualPriceEnabled: false,
 };
 
-// ── Session helpers ──────────────────────────────────────────────────────────
-
-function loadAdminSession() {
-  try {
-    const raw = localStorage.getItem(SESSION_KEY);
-    if (!raw) return null;
-    const { token, ts } = JSON.parse(raw);
-    if (!token || !ts || Date.now() - ts >= SESSION_TTL) return null;
-    return token;
-  } catch {
-    return null;
-  }
-}
-
-function saveAdminSession(token) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify({ token, ts: Date.now() }));
-}
-
-function clearAdminSession() {
-  localStorage.removeItem(SESSION_KEY);
-}
-
 // ── Server auth ──────────────────────────────────────────────────────────────
 
 async function loginWithPassword(password) {
@@ -59,7 +33,16 @@ async function loginWithPassword(password) {
   if (!res.ok || !data.ok) {
     throw new Error(data.error || "Mot de passe incorrect");
   }
-  return data.token;
+  return true;
+}
+
+async function checkAdminSession() {
+  const res = await fetch("/api/admin-auth");
+  return res.ok;
+}
+
+async function logoutAdmin() {
+  await fetch("/api/admin-auth", { method: "DELETE" });
 }
 
 // ── File helper ──────────────────────────────────────────────────────────────
@@ -92,11 +75,18 @@ export default function AdminPage() {
   } = useCatalog();
 
   // Auth state
-  const [adminToken, setAdminToken] = useState(() => loadAdminSession());
-  const isLoggedIn = Boolean(adminToken);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isChecking, setIsChecking] = useState(true);
   const [password, setPassword]     = useState("");
   const [loginError, setLoginError] = useState("");
   const [loginBusy, setLoginBusy]   = useState(false);
+
+  useEffect(() => {
+    checkAdminSession().then((ok) => {
+      setIsLoggedIn(ok);
+      setIsChecking(false);
+    });
+  }, []);
 
   // UI state
   const [activeTab, setActiveTab]       = useState("stats");
@@ -121,6 +111,18 @@ export default function AdminPage() {
   const rejectedOrders = useMemo(
     () => orders.filter((o) => o.status === "rejected"), [orders],
   );
+
+  const [prevPendingCount, setPrevPendingCount] = useState(pendingOrders.length);
+  const [hasNewOrder, setHasNewOrder] = useState(false);
+
+  useEffect(() => {
+    if (pendingOrders.length > prevPendingCount) {
+      setHasNewOrder(true);
+      // Ding sound or vibration could be added here
+    }
+    setPrevPendingCount(pendingOrders.length);
+  }, [pendingOrders.length, prevPendingCount]);
+
   const totalRevenue = useMemo(
     () => approvedOrders.reduce((s, o) => s + Number(o.total || 0), 0),
     [approvedOrders],
@@ -151,9 +153,8 @@ export default function AdminPage() {
     setLoginError("");
     setLoginBusy(true);
     try {
-      const token = await loginWithPassword(password);
-      saveAdminSession(token);
-      setAdminToken(token);
+      await loginWithPassword(password);
+      setIsLoggedIn(true);
       setPassword("");
     } catch (err) {
       setLoginError(err.message || "Erreur de connexion");
@@ -162,9 +163,9 @@ export default function AdminPage() {
     }
   };
 
-  const handleLogout = () => {
-    clearAdminSession();
-    setAdminToken(null);
+  const handleLogout = async () => {
+    await logoutAdmin();
+    setIsLoggedIn(false);
     setPassword("");
     setLoginError("");
   };
@@ -233,6 +234,14 @@ export default function AdminPage() {
   };
 
   // ── Login screen ──────────────────────────────────────────────────────────
+
+  if (isChecking) {
+    return (
+      <div className="flex h-40 items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600"></div>
+      </div>
+    );
+  }
 
   if (!isLoggedIn) {
     return (
@@ -303,12 +312,21 @@ export default function AdminPage() {
           ([id, label]) => (
             <button
               key={id}
-              onClick={() => setActiveTab(id)}
-              className={`rounded-full px-4 py-2 text-sm font-semibold ${
+              onClick={() => {
+                setActiveTab(id);
+                if (id === "orders") setHasNewOrder(false);
+              }}
+              className={`relative rounded-full px-4 py-2 text-sm font-semibold ${
                 activeTab === id ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600"
               }`}
             >
               {label}
+              {id === "orders" && hasNewOrder && (
+                <span className="absolute -right-1 -top-1 flex h-3 w-3">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-400 opacity-75"></span>
+                  <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-500"></span>
+                </span>
+              )}
             </button>
           )
         )}
