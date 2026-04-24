@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { useCart } from "../../context/CartContext";
+import { usePWAInstall } from "../../hooks/usePWAInstall";
 import { APP_NAME } from "../../config/constants";
 
 const navItems = [
@@ -13,6 +14,7 @@ const navItems = [
 export default function Navbar() {
   const { count } = useCart();
   const [scrolled, setScrolled] = useState(false);
+  const { isInstallable, installPWA } = usePWAInstall();
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -63,6 +65,18 @@ export default function Navbar() {
 
         {/* Action buttons */}
         <div className="flex items-center gap-2.5">
+          {isInstallable && (
+            <button
+              onClick={installPWA}
+              className="hidden md:inline-flex items-center gap-1.5 rounded-xl border border-brand-200 bg-brand-50 px-3.5 py-2 text-xs font-bold text-brand-700 shadow-sm transition-all duration-300 hover:bg-brand-100 hover:shadow-md animate-fade-in"
+              aria-label="Installer l'application"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Installer App
+            </button>
+          )}
           <Link
             to="/panier"
             className="group relative inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-guinea-500 to-guinea-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-guinea-300/30 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-guinea-300/40"
@@ -106,6 +120,15 @@ export default function Navbar() {
             {item.label}
           </NavLink>
         ))}
+        {isInstallable && (
+          <button
+            onClick={installPWA}
+            className="flex items-center gap-1.5 whitespace-nowrap rounded-xl bg-brand-50 px-3.5 py-2 text-xs font-bold text-brand-700 shadow-sm ring-1 ring-brand-200 transition-all duration-300 hover:bg-brand-100 animate-fade-in"
+          >
+            <span aria-hidden="true">⬇️</span>
+            Installer App
+          </button>
+        )}
       </nav>
     </header>
   );
