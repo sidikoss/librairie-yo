@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { APP_NAME, OM_NUMBER, WA_NUMBER } from "../../config/constants";
 import { buildWhatsAppUrl } from "../../features/whatsapp/whatsapp";
+import { usePWAInstall } from "../../hooks/usePWAInstall";
 
 function formatPhone(num) {
   const cleaned = String(num || "").replace(/^224/, "");
@@ -9,6 +10,7 @@ function formatPhone(num) {
 
 export default function Footer() {
   const year = new Date().getFullYear();
+  const { isInstallable, installPWA } = usePWAInstall();
   return (
     <footer className="relative mt-16 overflow-hidden border-t border-slate-200/50">
       {/* Gradient background */}
@@ -108,6 +110,26 @@ export default function Footer() {
           </ul>
         </div>
       </div>
+
+      {/* App Install Button */}
+      {isInstallable && (
+        <div className="relative border-t border-slate-200/50 bg-brand-50/50">
+          <div className="mx-auto flex max-w-6xl flex-col items-center justify-center gap-3 px-4 py-6 text-center sm:flex-row">
+            <p className="text-sm font-semibold text-slate-700">
+              Profitez d'une meilleure expérience sur votre mobile
+            </p>
+            <button
+              onClick={installPWA}
+              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-brand-200/40 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-brand-300/50"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Installer l'Application
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Copyright bar */}
       <div className="relative border-t border-slate-200/50">
