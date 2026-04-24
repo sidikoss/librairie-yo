@@ -9,19 +9,20 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'robots.txt', 'apple-touch-icon.png'],
+      strategies: 'generateSW',
+      globPatterns: ['**/*.{js,css,html,png,svg,ico}'],
       manifest: {
         name: 'Librairie YO',
         short_name: 'LibYO',
-        description: 'Librairie digitale en Guinée',
+        description: 'Librairie digitale en Guinea',
         theme_color: '#1e40af',
         background_color: '#ffffff',
         display: 'standalone',
-        display_override: ['window-controls-overlay', 'standalone'],
         orientation: 'portrait',
         dir: 'ltr',
         categories: ['books', 'shopping', 'lifestyle'],
-        id: '/?source=pwa',
-        start_url: '/?source=pwa',
+        id: '/',
+        start_url: '/',
         icons: [
           {
             src: 'pwa-192x192.png',
@@ -32,36 +33,6 @@ export default defineConfig({
             src: 'pwa-512x512.png',
             sizes: '512x512',
             type: 'image/png'
-          }
-        ],
-        screenshots: [
-          {
-            src: 'og-image.png',
-            sizes: '1024x1024',
-            type: 'image/jpeg',
-            form_factor: 'wide'
-          },
-          {
-            src: 'og-image.png',
-            sizes: '1024x1024',
-            type: 'image/jpeg',
-            form_factor: 'narrow'
-          }
-        ],
-        shortcuts: [
-          {
-            name: "Catalogue",
-            short_name: "Catalogue",
-            description: "Voir tous les livres",
-            url: "/catalogue",
-            icons: [{ src: "pwa-192x192.png", sizes: "192x192" }]
-          },
-          {
-            name: "Panier",
-            short_name: "Panier",
-            description: "Voir votre panier",
-            url: "/panier",
-            icons: [{ src: "pwa-192x192.png", sizes: "192x192" }]
           }
         ]
       }
@@ -92,13 +63,6 @@ export default defineConfig({
     chunkSizeWarningLimit: 500,
     cssCodeSplit: true,
     sourcemap: false,
-    minify: 'terser',
-    terserOptions: {
-      compress: {
-        drop_console: true,
-        drop_debugger: true,
-      },
-    },
     rollupOptions: {
       output: {
         manualChunks(id) {
