@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
-import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
-import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import { usePdfLibrary } from "../hooks/usePdfLibrary";
 import SectionHeader from "../components/ui/SectionHeader";
 import { ensureReaderSession, isFirebaseReaderConfigured } from "../services/firebaseClient";
 
-GlobalWorkerOptions.workerSrc = pdfWorker;
 
 function normalizeDigits(value) {
   return String(value || "").replace(/[^\d]/g, "");
@@ -56,6 +54,8 @@ function buildWatermarkLabel({ title, uid, phone }) {
 export default function SecureReaderPage() {
   const [searchParams] = useSearchParams();
   const location = useLocation();
+  const { pdfLib, error: pdfLibError } = usePdfLibrary();
+
   const canvasRef = useRef(null);
   const frameRef = useRef(null);
 
@@ -132,6 +132,7 @@ export default function SecureReaderPage() {
     let loadedDoc = null;
 
     async function loadPdfInMemory() {
+      if (!pdfLib || pdfLibError) return;
       if (!orderId || !bookId) {
         setError("Lien de lecture incomplet.");
         setLoading(false);
@@ -180,7 +181,7 @@ export default function SecureReaderPage() {
         const pdfBuffer = await response.arrayBuffer();
         if (cancelled) return;
 
-        const loadingTask = getDocument({
+        const loadingTask = pdfLib.getDocument({
           data: pdfBuffer,
           disableAutoFetch: true,
           disableRange: true,
@@ -222,6 +223,8 @@ export default function SecureReaderPage() {
   }, [orderId, bookId, title, fallbackPhone, fallbackPin]);
 
   const statusLabel = useMemo(() => {
+    if (pdfLibError) return `Erreur PDF: ${pdfLibError}`;
+    if (!pdfLib) return "Initialisation du lecteur...";
     if (loading) return "Chargement sécurisé en cours...";
     if (rendering) return "Rendu de la page...";
     if (error) return error;
@@ -243,7 +246,7 @@ export default function SecureReaderPage() {
             <button
               type="button"
               onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-              disabled={!canGoPrev || loading || Boolean(error)}
+              disabled={!canGoPrev || loading || Boolean(error) || !pdfLib}
               className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-40"
             >
               Page precedente
@@ -251,7 +254,7 @@ export default function SecureReaderPage() {
             <button
               type="button"
               onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-              disabled={!canGoNext || loading || Boolean(error)}
+              disabled={!canGoNext || loading || Boolean(error) || !pdfLib}
               className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-40"
             >
               Page suivante

@@ -32,10 +32,10 @@ export default async function handler(req, res) {
       customer_phone: phone,
       description: description,
       // L'URL où l'utilisateur sera redirigé après paiement (succès ou échec)
-      return_url: `${process.env.VITE_PUBLIC_URL || 'https://librairie-yo.vercel.app'}/commandes?payment_return=true`,
+      return_url: `${process.env.APP_PUBLIC_URL || 'https://librairie-yo.vercel.app'}/commandes?payment_return=true`,
       // L'URL de notre webhook pour recevoir la confirmation silencieuse
-      cancel_url: `${process.env.VITE_PUBLIC_URL || 'https://librairie-yo.vercel.app'}/checkout`,
-      webhook_url: `${process.env.VITE_PUBLIC_URL || 'https://librairie-yo.vercel.app'}/api/paycard-webhook`,
+      cancel_url: `${process.env.APP_PUBLIC_URL || 'https://librairie-yo.vercel.app'}/checkout`,
+      webhook_url: `${process.env.APP_PUBLIC_URL || 'https://librairie-yo.vercel.app'}/api/paycard-webhook`,
     };
 
     const response = await fetch(PAYCARD_API_URL, {

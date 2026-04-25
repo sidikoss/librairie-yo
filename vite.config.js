@@ -38,13 +38,13 @@ export default defineConfig({
           {
             src: 'og-image.png',
             sizes: '1024x1024',
-            type: 'image/jpeg',
+            type: 'image/png',
             form_factor: 'wide'
           },
           {
             src: 'og-image.png',
             sizes: '1024x1024',
-            type: 'image/jpeg',
+            type: 'image/png',
             form_factor: 'narrow'
           }
         ],
