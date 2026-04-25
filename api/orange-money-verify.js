@@ -1,54 +1,119 @@
+const PAYMENT_STORE_KEY = "yo_payment_refs";
+
+function getPaymentStore() {
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const stored = localStorage.getItem(PAYMENT_STORE_KEY);
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+function setPaymentRef(ref, data) {
+  const store = getPaymentStore();
+  store[ref] = { ...data, timestamp: Date.now() };
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem(PAYMENT_STORE_KEY, JSON.stringify(store));
+  }
+}
+
+function getPaymentRef(ref) {
+  const store = getPaymentStore();
+  return store[ref] || null;
+}
+
+function isRefUsed(ref) {
+  const data = getPaymentRef(ref);
+  if (!data) return false;
+  
+  const twentyFourHours = 24 * 60 * 60 * 1000;
+  if (Date.now() - data.timestamp > twentyFourHours) {
+    return false;
+  }
+  
+  return data.used === true;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
+  const clientIp = req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || 'unknown';
+  console.log(`[Orange Money] Payment request from ${clientIp}`);
+
   try {
     const { txId, amount, name, phone, pin, promoCode } = req.body;
 
-    // Basic validation
     if (!txId || !amount || !name || !phone || !pin) {
-      return res.status(400).json({ error: 'Missing required parameters' });
+      return res.status(400).json({ error: 'Paramètres manquants' });
     }
 
-    // Validate PIN: 4 digits
     if (!/^\d{4}$/.test(pin)) {
-      return res.status(400).json({ error: 'PIN must be 4 digits' });
+      return res.status(400).json({ error: 'Le PIN doit contenir 4 chiffres' });
     }
 
-    // Validate transaction ID (reference): alphanumeric only
     if (!/^[A-Za-z0-9]+$/.test(txId)) {
-      return res.status(400).json({ error: 'Reference must be alphanumeric only' });
+      return res.status(400).json({ error: 'Référence invalide. Utilisez uniquement lettres et chiffres.' });
     }
 
-    // Optional: check amount is positive number
     const amountNum = parseFloat(amount);
     if (isNaN(amountNum) || amountNum <= 0) {
-      return res.status(400).json({ error: 'Invalid amount' });
+      return res.status(400).json({ error: 'Montant invalide' });
     }
 
-    // Simulate anti-duplicate: in a real app, check database/cache
-    // For demo, we'll just accept any reference (no duplicate check)
+    if (isRefUsed(txId)) {
+      return res.status(409).json({ 
+        error: 'Cette référence a déjà été utilisée. Veuillez entrer une nouvelle référence.',
+        code: 'REF_ALREADY_USED'
+      });
+    }
 
-    // Simulate processing delay
     await new Promise(resolve => setTimeout(resolve, 800));
 
-    // Simulate random failure 10% of the time
-    if (Math.random() < 0.1) {
-      return res.status(402).json({ error: 'Payment verification failed. Please try again.' });
+    const successRate = 0.85;
+    const isSuccess = Math.random() < successRate;
+
+    if (!isSuccess) {
+      setPaymentRef(txId, {
+        used: false,
+        failed: true,
+        amount: amountNum,
+        phone: phone.substring(0, 8) + '****',
+        reason: 'SIMULATED_FAILURE'
+      });
+      
+      return res.status(402).json({ 
+        error: 'Paiement non vérifié. Veuillez vérifier votre référence et réessayer.',
+        code: 'VERIFICATION_FAILED',
+        retry: true
+      });
     }
 
-    // Success: return a dummy order ID (in real app, you would create order in DB)
     const orderId = `OM_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+    
+    setPaymentRef(txId, {
+      used: true,
+      amount: amountNum,
+      phone: phone.substring(0, 8) + '****',
+      orderId: orderId,
+      status: 'VERIFIED'
+    });
+
+    console.log(`[Orange Money] Payment verified successfully: ref=${txId}, orderId=${orderId}, amount=${amountNum}`);
 
     return res.status(200).json({
       success: true,
       orderId,
-      message: 'Payment verified successfully',
-      // You could also return transaction details from Orange Money API
+      message: 'Paiement vérifié avec succès',
+      amount: amountNum,
+      reference: txId
     });
   } catch (error) {
-    console.error('Orange Money verification error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error('[Orange Money] Verification error:', error);
+    return res.status(500).json({ error: 'Erreur serveur interne' });
   }
 }
