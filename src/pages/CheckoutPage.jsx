@@ -6,7 +6,7 @@ import { useCart } from "../context/CartContext";
 import { useCatalog } from "../context/CatalogContext";
 import { validateCheckoutForm, extractPaymentReference } from "../features/checkout/checkoutValidation";
 import { ensureReaderSession } from "../services/firebaseClient";
-import { formatGNF, normalizePhone, sanitizeText, sanitizeHtml } from "../utils/format";
+import { formatGNF, normalizePhone, sanitizeText } from "../utils/format";
 import { validatePINFormat, generateSecureToken, hashPIN } from "../utils/crypto";
 import { OM_NUMBER } from "../config/constants";
 import { useToast } from "../components/ui/Toast";
