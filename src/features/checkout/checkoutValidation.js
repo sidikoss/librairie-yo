@@ -38,7 +38,7 @@ export function validateCheckoutForm(form) {
     errors.phone = "Numéro de téléphone invalide";
   }
 
-  if (form.mode === "whatsapp") {
+  if (form.mode === "whatsapp" || form.mode === "orange_money") {
     if (!/^\d{4}$/.test(String(form.pin || ""))) {
       errors.pin = "PIN à 4 chiffres requis";
     }
