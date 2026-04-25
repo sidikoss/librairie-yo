@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Restored a working baseline after breaking local changes** via commit `6fa1043` ("revert: back to working state before my changes").
   The revert commit brought multiple areas back to the last known good behavior:
   - **Admin auth & sessions** (`api/admin-auth.js`, `src/pages/AdminPage.jsx`)
-  - **PayCard endpoints** (`api/paycard-init.js`, `api/paycard-webhook.js`)
+  - **paycard endpoints** (`api/paycard-init.js`, `api/paycard-webhook.js`)
   - **Checkout / Orders / Secure Reader flows** (`src/pages/CheckoutPage.jsx`, `src/pages/OrdersPage.jsx`, `src/pages/SecureReaderPage.jsx`)
   - **Firebase client & data layer** (`src/services/firebaseApi.js`, `src/services/firebaseClient.js`, `src/context/CatalogContext.jsx`)
   - **SEO/robots, Vercel + Vite configuration** (`src/components/seo/SEO.jsx`, `public/robots.txt`, `vercel.json`, `vite.config.js`)
@@ -34,7 +34,7 @@ The commit message indicates the issue came from **uncommitted "my changes"** th
 Those changes were not preserved as a dedicated commit; instead, commit `6fa1043` re-stabilized the codebase by restoring prior versions across:
 
 - **Authentication/session logic** (admin + reader)
-- **Payment webhooks/handlers (PayCard)**
+- **Payment webhooks/handlers (paycard)**
 - **Core pages and data flows** (checkout, orders, reader)
 - **Configuration** (Vite/Vercel/SEO)
 - **Database rules** (Realtime Database)

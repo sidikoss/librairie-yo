@@ -38,7 +38,7 @@ export function validateCheckoutForm(form) {
     errors.phone = "Numéro de téléphone invalide";
   }
 
-  if (form.mode === "orange_money") {
+  if (form.mode === "whatsapp") {
     const referencePaiement = extractPaymentReference(form.txId);
     if (!referencePaiement) {
       errors.txId = "Référence de transaction requise";

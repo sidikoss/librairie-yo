@@ -54,7 +54,7 @@ export default function CheckoutPage() {
   };
 
   const processPayment = async () => {
-    const e = validateCheckoutForm({ ...form, txId: "API", mode: "orange_money" });
+    const e = validateCheckoutForm({ ...form, txId: "API", mode: "whatsapp" });
     if (Object.keys(e).length) { setErrors(e); return; }
     setSubmitting(true);
     setPaymentError("");
@@ -80,7 +80,7 @@ export default function CheckoutPage() {
       
       const orderId = await submitOrder(orderPayload);
       
-      // 2. Initialiser le paiement PayCard via notre API backend
+      // 2. Initialiser le paiement paycard via notre API backend
       const response = await fetch('/api/paycard-init', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -96,10 +96,10 @@ export default function CheckoutPage() {
       const data = await response.json();
       
       if (!response.ok) {
-        throw new Error(data.error || "Erreur lors de l'initialisation du paiement PayCard.");
+        throw new Error(data.error || "Erreur lors de l'initialisation du paiement paycard.");
       }
 
-      // 3. Rediriger l'utilisateur vers la page de paiement PayCard
+      // 3. Rediriger l'utilisateur vers la page de paiement paycard
       if (data.paymentUrl) {
         // Sauvegarder les infos pour l'écran de retour
         sessionStorage.setItem("pendingOrderPin", form.pin.trim());
@@ -108,14 +108,14 @@ export default function CheckoutPage() {
         
         window.location.href = data.paymentUrl;
       } else {
-        // Fallback simulation (si l'API PayCard n'est pas configurée)
+        // Fallback simulation (si l'API paycard n'est pas configurée)
         setSuccessPayload({ orderId, pin: form.pin.trim(), phone: normalizePhone(form.phone) });
         clearCart();
       }
 
     } catch (err) {
       console.error(err);
-      setPaymentError(err.message || "Impossible de contacter PayCard. Veuillez utiliser WhatsApp en secours.");
+      setPaymentError(err.message || "Impossible de contacter paycard. Veuillez utiliser WhatsApp en secours.");
     } finally { 
       setSubmitting(false); 
     }
@@ -125,9 +125,9 @@ export default function CheckoutPage() {
     <div className="space-y-6">
       <SEO 
         title="Finaliser la commande" 
-        description="Paiement sécurisé via Orange Money ou PayCard pour vos livres sur Librairie YO." 
+        description="Paiement sécurisé via Orange Money ou paycard pour vos livres sur Librairie YO." 
       />
-      <SectionHeader eyebrow="Checkout" title="Paiement Sécurisé" description="Réglez facilement par carte bancaire ou Mobile Money via PayCard." />
+      <SectionHeader eyebrow="Checkout" title="Paiement Sécurisé" description="Réglez facilement par carte bancaire ou Mobile Money via paycard." />
 
       {successPayload ? (
         <section className="card-surface overflow-hidden animate-scale-in">
@@ -152,7 +152,7 @@ export default function CheckoutPage() {
           <div className="card-surface p-6 animate-fade-in-up">
             <h3 className="flex items-center gap-2 font-heading text-lg font-bold text-slate-900">
               <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-brand-100 text-sm" aria-hidden="true">💳</span>
-              Paiement via PayCard
+              paiement via paycard
             </h3>
             <p className="mt-1 text-xs text-slate-500">Saisissez vos informations pour accéder au paiement.</p>
             
@@ -177,7 +177,7 @@ export default function CheckoutPage() {
                 )}
                 
                 <button onClick={processPayment} disabled={submitting} className="w-full rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 px-5 py-4 text-sm font-bold text-white shadow-lg transition-all hover:-translate-y-0.5 disabled:opacity-60">
-                  {submitting ? "Redirection vers PayCard..." : `Payer en ligne • ${formatGNF(finalTotal)}`}
+                  {submitting ? "Redirection vers paycard..." : `Payer en ligne • ${formatGNF(finalTotal)}`}
                 </button>
               </div>
             </div>

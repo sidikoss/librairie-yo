@@ -18,7 +18,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ valid: true, status: "SUCCESS" });
     }
 
-    // A AJUSTER selon l'API de vérification PayCard réelle
+    // A AJUSTER selon l'API de vérification paycard réelle
     // Exemple générique de vérification d'une transaction:
     const PAYCARD_VERIFY_URL = `https://api.mapaycard.com/v1/payments/verify/${transactionId || orderId}`;
     

@@ -23,7 +23,7 @@ export default async function handler(req, res) {
     }
 
     // Construction du payload selon le format standard d'une API de paiement
-    // (A AJUSTER selon la documentation exacte fournie par PayCard)
+    // (A AJUSTER selon la documentation exacte fournie par paycard)
     const payload = {
       amount: amount,
       currency: "GNF",
@@ -50,14 +50,14 @@ export default async function handler(req, res) {
     const data = await response.json();
 
     if (!response.ok) {
-      console.error("Erreur API PayCard:", data);
+      console.error("Erreur API paycard:", data);
       return res.status(response.status).json({ 
-        error: data.message || "Erreur de communication avec PayCard." 
+        error: data.message || "Erreur de communication avec paycard." 
       });
     }
 
     // L'API doit normalement renvoyer une URL de paiement (ex: data.payment_url)
-    // (A AJUSTER selon la structure exacte de la réponse PayCard)
+    // (A AJUSTER selon la structure exacte de la réponse paycard)
     const paymentUrl = data.payment_url || data.url;
 
     if (!paymentUrl) {

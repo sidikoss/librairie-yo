@@ -8,7 +8,7 @@ export default async function handler(req, res) {
   try {
     const payload = req.body;
 
-    // Vérification de la signature webhook PayCard
+    // Vérification de la signature webhook paycard
     const WEBHOOK_SECRET = process.env.PAYCARD_WEBHOOK_SECRET;
     const providedSignature = req.headers['x-paycard-signature'];
 
@@ -17,9 +17,9 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    console.log("Webhook PayCard reçu:", payload);
+    console.log("Webhook paycard reçu:", payload);
 
-    // Extraction des données (à ajuster selon la spec PayCard)
+    // Extraction des données (à ajuster selon la spec paycard)
     const orderId = payload.order_id || payload.custom_field;
     const transactionStatus = payload.status;
     const referencePaiement = payload.transaction_id || payload.reference;
@@ -38,7 +38,7 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: "Order not found" });
     }
 
-    // Mise à jour du statut selon le retour de PayCard
+    // Mise à jour du statut selon le retour de paycard
     if (transactionStatus === "SUCCESS" || transactionStatus === "COMPLETED") {
       await orderRef.update({
         status: "approved",
