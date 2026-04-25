@@ -93,7 +93,7 @@ export default function HomePage() {
           <h3 className="font-heading text-2xl font-extrabold text-white sm:text-3xl">
             Prêt à commander ?
           </h3>
-          <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-slate-300">
+          <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-zinc-300 dark:text-zinc-400">
             Explorez tout le catalogue et finalisez rapidement votre achat sur WhatsApp.
           </p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
@@ -108,7 +108,7 @@ export default function HomePage() {
                 </svg>
               </span>
             </button>
-            <div className="flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold text-slate-300 backdrop-blur-sm">
+            <div className="flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold text-zinc-300 dark:text-zinc-400 backdrop-blur-sm">
               <span className="h-2 w-2 rounded-full bg-guinea-400 animate-pulse-soft" />
               {books.length} livres disponibles
             </div>

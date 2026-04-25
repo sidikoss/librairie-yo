@@ -8,13 +8,13 @@ export default function RatingStars({ value = 5 }) {
           className={`transition-all duration-200 ${
             index < rounded
               ? "text-accent-500 drop-shadow-sm"
-              : "text-slate-300"
+              : "text-zinc-300 dark:text-zinc-600"
           }`}
         >
           ★
         </span>
       ))}
-      <span className="ml-1 text-[10px] font-semibold text-slate-400">
+      <span className="ml-1 text-[10px] font-semibold text-zinc-400 dark:text-zinc-500">
         {Number(value || 0).toFixed(1)}
       </span>
     </div>

@@ -15,7 +15,7 @@ function StatusBadge({ status }) {
   const labels = { pending: "En attente", approved: "Approuvée", rejected: "Rejetée" };
   const icons = { pending: "⏳", approved: "✓", rejected: "✗" };
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold ${styles[status] || "bg-slate-100 text-slate-700 border-slate-200"}`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold ${styles[status] || "bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700"}`}>
       <span>{icons[status] || "•"}</span>{labels[status] || status}
     </span>
   );
@@ -71,7 +71,7 @@ export default function OrdersPage() {
             {loading ? "Recherche..." : "Afficher"}
           </button>
         </div>
-        {feedback && <p className="mt-3 text-sm text-slate-500">{feedback}</p>}
+        {feedback && <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">{feedback}</p>}
       </section>
 
       {orders?.length ? (
@@ -80,13 +80,13 @@ export default function OrdersPage() {
             <article key={order.fbKey} className="card-surface overflow-hidden opacity-0-initial animate-fade-in-up fill-forwards" style={{ animationDelay: `${idx * 100}ms` }}>
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-5">
                 <div>
-                  <p className="text-xs text-slate-400">{order.createdAt ? new Date(order.createdAt).toLocaleString("fr-FR") : "Date indisponible"}</p>
-                  <p className="mt-1 font-heading text-base font-bold text-slate-900">Total: {formatGNF(order.total)}</p>
+                  <p className="text-xs text-zinc-400 dark:text-zinc-500">{order.createdAt ? new Date(order.createdAt).toLocaleString("fr-FR") : "Date indisponible"}</p>
+                  <p className="mt-1 font-heading text-base font-bold text-zinc-900 dark:text-white">Total: {formatGNF(order.total)}</p>
                 </div>
                 <StatusBadge status={order.status} />
               </div>
               <div className="p-5">
-                <p className="text-xs text-slate-400">Réf: <span className="font-mono font-semibold text-slate-600">{order.referencePaiement || order.txId || "N/A"}</span></p>
+                <p className="text-xs text-zinc-400 dark:text-zinc-500">Réf: <span className="font-mono font-semibold text-zinc-600 dark:text-zinc-300">{order.referencePaiement || order.txId || "N/A"}</span></p>
                 <div className="mt-3 space-y-2">
                   {(order.items || []).map((item, i) => {
                     const bid = item.bookId || item.fbKey || item.id || `${i}`;
@@ -94,7 +94,7 @@ export default function OrdersPage() {
                       <div key={`${bid}-${i}`} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 bg-slate-50/50 p-3">
                         <div className="flex items-center gap-2"><span className="flex h-6 w-6 items-center justify-center rounded-md bg-brand-50 text-[10px] font-bold text-brand-600">{i + 1}</span><p className="text-sm font-medium text-slate-800">{item.title}</p></div>
                         <div className="flex items-center gap-2">
-                          <p className="text-sm font-bold text-slate-900">{formatGNF(item.price)}</p>
+                          <p className="text-sm font-bold text-zinc-900 dark:text-white">{formatGNF(item.price)}</p>
                           {order.status === "approved" && (
                             <button onClick={() => openReader(order, item)} disabled={openingBookId === bid} className="rounded-lg bg-gradient-to-r from-guinea-500 to-guinea-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-all hover:-translate-y-0.5 disabled:opacity-60">
                               📖 Lire

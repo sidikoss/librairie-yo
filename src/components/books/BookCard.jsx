@@ -1,17 +1,19 @@
-import { useState } from "react";
+import { memo, useState } from "react";
+import LazyImage from "../common/LazyImage";
 import Badge from "../ui/Badge";
 import PriceTag from "../ui/PriceTag";
 import RatingStars from "../ui/RatingStars";
 import SalesCounter from "../ui/SalesCounter";
 import { buildBookWhatsAppUrl } from "../../features/whatsapp/whatsapp";
 
-export default function BookCard({
+const BookCard = memo(function BookCard({
   book,
   onAddToCart,
   onToggleFavorite,
   isFavorite,
 }) {
   const [isAdded, setIsAdded] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
 
   const handleAddToCart = () => {
     onAddToCart(book);
@@ -23,31 +25,39 @@ export default function BookCard({
 
   return (
     <article
-      className="group flex h-full flex-col overflow-hidden rounded-2xl border border-white/60 bg-white/90 shadow-sm backdrop-blur-sm transition-all duration-500 ease-out-expo hover:-translate-y-2 hover:shadow-card-hover"
+      className="group flex h-full flex-col overflow-hidden rounded-card-lg border border-white/40 bg-white/90 shadow-soft-sm backdrop-blur-md transition-all duration-500 ease-out-expo hover:-translate-y-2 hover:shadow-card-hover"
       aria-labelledby={`book-title-${book.id}`}
     >
-      {/* Cover image */}
-      <div className="relative aspect-[3/4] overflow-hidden bg-gradient-to-br from-brand-50 via-accent-100/40 to-guinea-50">
+      {/* Cover image with optimized loading */}
+      <div className="relative aspect-book overflow-hidden bg-gradient-to-br from-surface-50 via-brand-50/30 to-guinea-50/30">
         {book.image ? (
-          <img
+          <LazyImage
             src={book.image}
             alt={`Couverture du livre "${book.title}" par ${book.author}`}
-            loading="lazy"
-            className="h-full w-full object-cover transition-all duration-700 ease-out-expo group-hover:scale-110"
-            width={300}
-            height={400}
+            loadingStrategy="lazy"
+            className={`h-full w-full transition-all duration-700 ease-out-expo group-hover:scale-110 ${
+              imageLoaded ? 'opacity-100' : 'opacity-0'
+            }`}
+            onLoad={() => setImageLoaded(true)}
+            onError={() => setImageLoaded(true)}
           />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-2" aria-hidden="true">
             <span className="text-5xl">{book.emoji || "📖"}</span>
-            <span className="font-heading text-sm font-bold text-slate-400">
+            <span className="font-heading text-sm font-bold text-zinc-400">
               {(book.title || "").slice(0, 15)}
             </span>
           </div>
         )}
 
+        {!imageLoaded && book.image && (
+          <div className="absolute inset-0 flex items-center justify-center bg-zinc-200 animate-pulse dark:bg-zinc-700">
+            <span className="text-zinc-400 dark:text-zinc-500">Chargement...</span>
+          </div>
+        )}
+
         {/* Hover overlay gradient */}
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+        <div className="absolute inset-0 bg-gradient-to-t from-zinc-900/60 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
 
         {/* Badges */}
         <div className="absolute left-3 top-3 flex flex-wrap gap-1.5" role="list" aria-label="Badges du livre">
@@ -62,7 +72,7 @@ export default function BookCard({
           className={`absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full border border-white/60 text-sm shadow-lg backdrop-blur-md transition-all duration-300 hover:scale-110 ${
             isFavorite
               ? "bg-brand-500 text-white"
-              : "bg-white/90 text-slate-500 hover:bg-brand-50 hover:text-brand-500"
+              : "bg-white/90 text-zinc-500 hover:bg-brand-50 hover:text-brand-500 dark:bg-zinc-800/90 dark:text-zinc-400 dark:hover:bg-brand-900 dark:hover:text-brand-400"
           }`}
           aria-label={isFavorite ? `Retirer "${book.title}" des favoris` : `Ajouter "${book.title}" aux favoris`}
           aria-pressed={isFavorite}
@@ -92,11 +102,11 @@ export default function BookCard({
         </p>
         <h3
           id={`book-title-${book.id}`}
-          className="line-clamp-2 font-heading text-base font-bold leading-snug text-slate-900 transition-colors duration-300 group-hover:text-brand-700 sm:text-lg"
+          className="font-heading text-base font-bold leading-snug text-zinc-900 transition-colors duration-300 group-hover:text-brand-700 dark:group-hover:text-brand-400 sm:text-lg"
         >
           {book.title}
         </h3>
-        <p className="mb-3 text-xs text-slate-500 sm:text-sm">{book.author}</p>
+        <p className="mb-3 text-xs text-zinc-500 sm:text-sm">{book.author}</p>
 
         <div className="mb-3 flex items-center justify-between gap-2">
           <PriceTag price={book.price} discount={book.discount} />
@@ -134,4 +144,6 @@ export default function BookCard({
       </div>
     </article>
   );
-}
+});
+
+export default BookCard;

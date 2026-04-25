@@ -6,8 +6,10 @@ import { useCart } from "../context/CartContext";
 import { useCatalog } from "../context/CatalogContext";
 import { validateCheckoutForm, extractPaymentReference } from "../features/checkout/checkoutValidation";
 import { ensureReaderSession } from "../services/firebaseClient";
-import { formatGNF, normalizePhone } from "../utils/format";
+import { formatGNF, normalizePhone, sanitizeText, sanitizeHtml } from "../utils/format";
+import { validatePINFormat, generateSecureToken, hashPIN } from "../utils/crypto";
 import { OM_NUMBER } from "../config/constants";
+import { useToast } from "../components/ui/Toast";
 
 const USED_REFS_KEY = "yo_used_refs";
 
@@ -40,15 +42,10 @@ function generateUssdCode(amount) {
   return `*144*1*1*${OM_NUMBER}*${amountInt}*1#`;
 }
 
-function copyUssdCode(code) {
-  navigator.clipboard.writeText(code).then(() => {
-    alert("Code USSD copié ! Collez-le dans votre composeur téléphonique.");
-  }).catch(() => {
-    alert("Impossible de copier. Veuillez copier manuellement.");
-  });
-}
+
 
 export default function CheckoutPage() {
+  const toast = useToast();
   const { items, total, clearCart } = useCart();
   const { submitOrder, promoCodes } = useCatalog();
   const [form, setForm] = useState({ name: "", phone: "", pin: "", promoCode: "", txId: "" });
@@ -58,6 +55,7 @@ export default function CheckoutPage() {
   const [paymentError, setPaymentError] = useState("");
   const [showUssdGuide, setShowUssdGuide] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [sessionToken, setSessionToken] = useState(null);
 
   const { promo, discount } = useMemo(() => resolvePromo(promoCodes, form.promoCode, total), [promoCodes, form.promoCode, total]);
   const finalTotal = Math.max(0, total - discount);
@@ -76,7 +74,7 @@ export default function CheckoutPage() {
         <SectionHeader eyebrow="Checkout" title="Votre panier est vide" description="Ajoutez des livres avant de lancer une commande." />
         <div className="card-surface p-10 text-center animate-fade-in">
           <span className="mb-4 block text-6xl" aria-hidden="true">🛒</span>
-          <p className="mb-6 text-sm text-slate-500">Votre panier est vide</p>
+          <p className="mb-6 text-sm text-zinc-500 dark:text-zinc-400">Votre panier est vide</p>
           <Link to="/catalogue" className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-brand-500 to-brand-600 px-6 py-3 text-sm font-bold text-white shadow-lg transition-all hover:-translate-y-0.5">
             Retour au catalogue
           </Link>
@@ -88,13 +86,22 @@ export default function CheckoutPage() {
   const chg = (f, v) => { setForm((p) => ({ ...p, [f]: v })); setErrors((p) => ({ ...p, [f]: "" })); setPaymentError(""); };
 
   const handleCopyUssd = () => {
-    copyUssdCode(ussdCode);
-    setCopied(true);
+    navigator.clipboard.writeText(ussdCode).then(() => {
+      toast.success("Code USSD copié ! Collez-le dans votre composeur téléphonique.");
+      setCopied(true);
+    }).catch(() => {
+      toast.error("Impossible de copier. Veuillez copier manuellement.");
+    });
   };
 
   const processOrangeMoneyPayment = async () => {
     const ref = extractPaymentReference(form.txId);
     const e = validateCheckoutForm({ ...form, txId: ref, mode: "orange_money" });
+    
+    const pinValidation = validatePINFormat(form.pin);
+    if (!pinValidation.valid) {
+      e.pin = pinValidation.error;
+    }
     
     if (!ref) {
       e.txId = "Référence de paiement requise (ex: A58452)";
@@ -117,18 +124,27 @@ export default function CheckoutPage() {
     
     try {
       let uid = "";
+      let secureToken = generateSecureToken(16);
+      setSessionToken(secureToken);
+      
       try { const s = await ensureReaderSession(); uid = s?.uid || ""; } catch {}
       
       const response = await fetch('/api/orange-money-verify', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Request-ID': secureToken,
+          'X-Session-Security': 'v1',
+        },
         body: JSON.stringify({
           txId: ref,
           amount: finalTotal,
-          name: form.name.trim(),
+          name: sanitizeText(form.name.trim()),
           phone: normalizePhone(form.phone),
-          pin: form.pin.trim(),
-          promoCode: promo?.code || null
+          pinHash: pinValidation.pin,
+          promoCode: promo?.code || null,
+          clientTimestamp: Date.now(),
+          clientSecureToken: secureToken,
         })
       });
 
@@ -138,31 +154,18 @@ export default function CheckoutPage() {
         throw new Error(data.error || "Erreur lors de la vérification du paiement.");
       }
 
-      addUsedRef(ref);
+addUsedRef(ref);
 
-      const orderPayload = {
-        name: form.name.trim(),
-        phone: normalizePhone(form.phone),
-        uid: uid || null,
-        txId: ref,
-        referencePaiement: ref,
-        pin: form.pin.trim(),
-        originalTotal: total,
-        discount,
-        total: finalTotal,
-        promoCode: promo?.code || null,
-        status: "approved",
-        items: items.map((i) => ({ bookId: i.bookId, fbKey: i.bookId, title: i.title, qty: 1, price: Number(i.unitPrice || 0) }))
-      };
-      
-      await submitOrder(orderPayload);
-      setSuccessPayload({ orderId: data.orderId, pin: form.pin.trim(), phone: normalizePhone(form.phone) });
+      // La commande est déjà créée côté serveur dans /api/orange-money-verify
+      // Pas besoin de submitOrder() ici (évite la double création)
+      setSuccessPayload({ orderId: data.orderId, pin: form.pin, phone: normalizePhone(form.phone) });
       clearCart();
     } catch (err) {
       console.error(err);
       setPaymentError(err.message || "Paiement refusé. Veuillez vérifier votre référence et réessayer.");
     } finally { 
       setSubmitting(false); 
+      setSessionToken(null);
     }
   };
 
@@ -182,10 +185,10 @@ export default function CheckoutPage() {
             <p className="mt-1 text-sm text-white/80">Votre commande a été validée.</p>
           </div>
           <div className="p-6">
-            <div className="space-y-3 rounded-xl border border-slate-100 bg-slate-50/80 p-5">
-              <div className="flex justify-between"><span className="text-sm text-slate-500">Commande</span><span className="font-mono text-sm font-bold">{successPayload.orderId}</span></div>
-              <div className="flex justify-between"><span className="text-sm text-slate-500">Téléphone</span><span className="text-sm font-semibold">+{successPayload.phone}</span></div>
-              <div className="flex justify-between items-center"><span className="text-sm text-slate-500">PIN secret</span><span className="rounded-lg border-2 border-green-200 bg-green-50 px-3 py-1 font-mono text-lg font-bold tracking-widest text-green-700">{successPayload.pin}</span></div>
+            <div className="space-y-3 rounded-xl border border-zinc-100 bg-zinc-50/80 p-5 dark:border-zinc-700 dark:bg-zinc-800/80">
+              <div className="flex justify-between"><span className="text-sm text-zinc-500 dark:text-zinc-400">Commande</span><span className="font-mono text-sm font-bold dark:text-white">{successPayload.orderId}</span></div>
+              <div className="flex justify-between"><span className="text-sm text-zinc-500 dark:text-zinc-400">Téléphone</span><span className="text-sm font-semibold dark:text-white">+{successPayload.phone}</span></div>
+              <div className="flex justify-between items-center"><span className="text-sm text-zinc-500 dark:text-zinc-400">PIN secret</span><span className="rounded-lg border-2 border-green-200 bg-green-50 px-3 py-1 font-mono text-lg font-bold tracking-widest text-green-700 dark:border-green-800 dark:bg-green-900/50 dark:text-green-400">{successPayload.pin}</span></div>
             </div>
             <div className="mt-5 flex flex-wrap gap-3">
               <Link to="/commandes" className="flex-1 rounded-xl bg-gradient-to-r from-green-500 to-green-600 px-5 py-3 text-center text-sm font-bold text-white shadow-lg transition-all hover:-translate-y-0.5">Mes livres</Link>
@@ -195,8 +198,8 @@ export default function CheckoutPage() {
       ) : (
         <section className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="card-surface p-6 animate-fade-in-up">
-            <h3 className="flex items-center gap-2 font-heading text-lg font-bold text-slate-900">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-green-100 text-sm" aria-hidden="true">🟠</span>
+            <h3 className="flex items-center gap-2 font-heading text-lg font-bold text-zinc-900 dark:text-white">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-green-100 text-sm dark:bg-green-900" aria-hidden="true">🟠</span>
               Paiement Orange Money
             </h3>
             
@@ -210,7 +213,7 @@ export default function CheckoutPage() {
                 
                 <div>
                   <input type="password" maxLength={4} value={form.pin} onChange={(e) => chg("pin", e.target.value.replace(/[^\d]/g, ""))} placeholder="PIN secret (4 chiffres)" className="input-premium w-full" />
-                  <p className="mt-1 text-[10px] text-slate-400">Pour accéder à vos livres</p>
+                  <p className="mt-1 text-[10px] text-zinc-400 dark:text-zinc-500">Pour accéder à vos livres</p>
                 </div>
                 {errors.pin && <p className="text-xs text-red-500">{errors.pin}</p>}
               </div>
@@ -223,7 +226,7 @@ export default function CheckoutPage() {
                 <div className="mt-4 bg-orange-50 border-2 border-orange-200 rounded-xl p-4 animate-fade-in">
                   <p className="text-sm font-bold text-orange-800 mb-3">📱 Étape 1 : Envoyez l'argent</p>
                   <div className="bg-white rounded-lg p-3 border border-orange-200 mb-3">
-                    <p className="text-xs text-slate-500 mb-1">Code USSD à composer :</p>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-1">Code USSD à composer :</p>
                     <code className="block text-sm font-mono text-orange-700 break-all">{ussdCode}</code>
                   </div>
                   <button onClick={handleCopyUssd} className="w-full mb-3 rounded-lg bg-orange-500 text-white py-2 text-sm font-medium hover:bg-orange-600 transition">
@@ -270,20 +273,20 @@ export default function CheckoutPage() {
           </div>
 
           <div className="card-surface overflow-hidden opacity-0-initial animate-fade-in-up delay-200 fill-forwards">
-            <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white p-5">
-              <h3 className="font-heading text-lg font-bold text-slate-900">📋 Résumé de la commande</h3>
+            <div className="border-b border-zinc-100 bg-gradient-to-r from-zinc-50 to-white p-5 dark:border-zinc-700 dark:from-zinc-800 dark:to-zinc-900">
+              <h3 className="font-heading text-lg font-bold text-zinc-900 dark:text-white">📋 Résumé de la commande</h3>
             </div>
             <div className="p-5">
-              <div className="space-y-2">{items.map((item, i) => (<div key={item.bookId} className="flex items-start justify-between gap-3 rounded-lg p-2.5 text-sm hover:bg-slate-50"><div className="flex items-center gap-2.5"><span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md bg-brand-50 text-[10px] font-bold text-brand-600">{i + 1}</span><p className="text-slate-700">{item.title}</p></div><p className="flex-shrink-0 font-bold text-slate-900">{formatGNF(Number(item.unitPrice || 0))}</p></div>))}</div>
-              <div className="mt-5 border-t border-slate-100 pt-5">
-                <label className="text-xs font-bold uppercase tracking-widest text-slate-400">Code promo</label>
+              <div className="space-y-2">{items.map((item, i) => (<div key={item.bookId} className="flex items-start justify-between gap-3 rounded-lg p-2.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"><div className="flex items-center gap-2.5"><span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md bg-brand-50 text-[10px] font-bold text-brand-600 dark:bg-brand-900 dark:text-brand-400">{i + 1}</span><p className="text-zinc-700 dark:text-zinc-300">{item.title}</p></div><p className="flex-shrink-0 font-bold text-zinc-900 dark:text-white">{formatGNF(Number(item.unitPrice || 0))}</p></div>))}</div>
+              <div className="mt-5 border-t border-zinc-100 pt-5 dark:border-zinc-700">
+                <label className="text-xs font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Code promo</label>
                 <input value={form.promoCode} onChange={(e) => chg("promoCode", e.target.value.toUpperCase())} placeholder="Ex: YO20" className="input-premium mt-2 w-full" />
-                {promo ? <p className="mt-2 text-xs font-semibold text-green-600 animate-fade-in">✓ {promo.code} ({promo.type === "percent" ? `${promo.discount}%` : formatGNF(promo.discount)})</p> : form.promoCode ? <p className="mt-2 text-xs text-red-500">Code invalide</p> : null}
+                {promo ? <p className="mt-2 text-xs font-semibold text-green-600 animate-fade-in dark:text-green-400">✓ {promo.code} ({promo.type === "percent" ? `${promo.discount}%` : formatGNF(promo.discount)})</p> : form.promoCode ? <p className="mt-2 text-xs text-red-500">Code invalide</p> : null}
               </div>
-              <div className="mt-5 space-y-2.5 border-t border-slate-100 pt-5">
-                <div className="flex justify-between text-sm"><span className="text-slate-500">Sous-total</span><span className="font-semibold">{formatGNF(total)}</span></div>
-                {discount > 0 && <div className="flex justify-between text-sm"><span className="text-slate-500">Réduction</span><span className="font-semibold text-green-600">-{formatGNF(discount)}</span></div>}
-                <div className="flex items-center justify-between rounded-xl bg-slate-900 px-4 py-3"><span className="font-semibold text-white">Total à payer</span><span className="font-heading text-xl font-extrabold text-white">{formatGNF(finalTotal)}</span></div>
+              <div className="mt-5 space-y-2.5 border-t border-zinc-100 pt-5 dark:border-zinc-700">
+                <div className="flex justify-between text-sm"><span className="text-zinc-500 dark:text-zinc-400">Sous-total</span><span className="font-semibold dark:text-white">{formatGNF(total)}</span></div>
+                {discount > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-500 dark:text-zinc-400">Réduction</span><span className="font-semibold text-green-600 dark:text-green-400">-{formatGNF(discount)}</span></div>}
+                <div className="flex items-center justify-between rounded-xl bg-zinc-900 px-4 py-3 dark:bg-zinc-800"><span className="font-semibold text-white">Total à payer</span><span className="font-heading text-xl font-extrabold text-white">{formatGNF(finalTotal)}</span></div>
               </div>
             </div>
           </div>

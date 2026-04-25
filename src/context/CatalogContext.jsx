@@ -116,17 +116,28 @@ export function CatalogProvider({ children }) {
     [books],
   );
 
-  const toggleWishlist = (bookId) => {
+  const wishlistSet = useMemo(
+    () => new Set(wishlistIds),
+    [wishlistIds],
+  );
+
+  const toggleWishlist = useCallback((bookId) => {
     setWishlistIds((prev) =>
       prev.includes(bookId)
         ? prev.filter((id) => id !== bookId)
         : [...prev, bookId],
     );
-  };
+  }, [setWishlistIds]);
 
-  const isFavorite = (bookId) => wishlistIds.includes(bookId);
+  const isFavorite = useCallback(
+    (bookId) => wishlistSet.has(bookId),
+    [wishlistSet],
+  );
 
-  const getBookById = (bookId) => books.find((book) => book.id === bookId);
+  const getBookById = useCallback(
+    (bookId) => books.find((book) => book.id === bookId),
+    [books],
+  );
 
   const upsertBook = async ({ draft, filePayload = null, bookId = null }) => {
     const currentBook = books.find((book) => book.id === bookId);

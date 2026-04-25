@@ -17,7 +17,7 @@ export default function CartPage() {
         />
         <div className="card-surface p-10 text-center">
           <span className="mb-4 block text-6xl" aria-hidden="true">🛒</span>
-          <p className="mb-6 text-sm text-slate-500">Aucun livre dans votre panier</p>
+          <p className="mb-6 text-sm text-zinc-500 dark:text-zinc-400">Aucun livre dans votre panier</p>
           <Link
             to="/catalogue"
             className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-brand-500 to-brand-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-brand-200/30 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl"
@@ -70,18 +70,18 @@ export default function CartPage() {
                 )}
               </div>
               <div>
-                <p className="font-heading font-bold text-slate-800">{item.title}</p>
-                <p className="text-sm font-semibold text-brand-600">{formatGNF(item.unitPrice)}</p>
+                <p className="font-heading font-bold text-zinc-800 dark:text-white">{item.title}</p>
+                <p className="text-sm font-semibold text-brand-600 dark:text-brand-400">{formatGNF(item.unitPrice)}</p>
               </div>
             </div>
 
             <div className="flex items-center gap-2.5">
-              <span className="rounded-lg border border-slate-200/80 bg-slate-50/80 px-3 py-1.5 text-xs font-semibold text-slate-500 backdrop-blur-sm">
+              <span className="rounded-lg border border-zinc-200/80 bg-zinc-50/80 px-3 py-1.5 text-xs font-semibold text-zinc-500 backdrop-blur-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
                 Achat unique
               </span>
               <button
                 onClick={() => removeItem(item.bookId)}
-                className="rounded-lg border border-brand-200/60 bg-brand-50/50 px-3 py-1.5 text-xs font-semibold text-brand-600 transition-all duration-200 hover:bg-brand-100 hover:shadow-sm"
+                className="rounded-lg border border-brand-200/60 bg-brand-50/50 px-3 py-1.5 text-xs font-semibold text-brand-600 transition-all duration-200 hover:bg-brand-100 hover:shadow-sm dark:border-brand-700 dark:bg-brand-900/50 dark:text-brand-400 dark:hover:bg-brand-900"
               >
                 Retirer
               </button>
@@ -94,20 +94,20 @@ export default function CartPage() {
       <section className="card-surface overflow-hidden">
         <div className="border-b border-slate-100 p-5">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-slate-500">Total ({items.length} article{items.length > 1 ? "s" : ""})</p>
-            <p className="font-heading text-2xl font-extrabold text-slate-900">{formatGNF(total)}</p>
+            <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Total ({items.length} article{items.length > 1 ? "s" : ""})</p>
+            <p className="font-heading text-2xl font-extrabold text-zinc-900 dark:text-white">{formatGNF(total)}</p>
           </div>
         </div>
         <div className="grid gap-3 p-5 sm:grid-cols-2">
           <Link
             to="/checkout"
-            className="rounded-xl bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3 text-center text-sm font-bold text-white shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl"
+            className="rounded-xl bg-gradient-to-r from-zinc-800 to-zinc-900 px-5 py-3 text-center text-sm font-bold text-white shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl dark:from-zinc-700 dark:to-zinc-800"
           >
             Continuer vers checkout
           </Link>
           <button
-            onClick={clearCart}
-            className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-medium text-slate-600 transition-all duration-200 hover:bg-slate-50 hover:shadow-sm"
+            onClick={() => { if (window.confirm("Êtes-vous sûr de vouloir vider votre panier ?")) clearCart(); }}
+            className="rounded-xl border border-zinc-200 px-5 py-3 text-sm font-medium text-zinc-600 transition-all duration-200 hover:bg-zinc-50 hover:shadow-sm dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
           >
             Vider le panier
           </button>

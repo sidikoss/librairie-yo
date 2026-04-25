@@ -1,30 +1,36 @@
-import { isValidPhone, sanitizeText } from "../../utils/format";
+import { isValidPhone, sanitizeText, stripHtml } from "../../utils/format";
+
+function sanitizePaymentReference(value) {
+  if (!value) return "";
+  const stripped = stripHtml(value);
+  return stripped
+    .replace(/[<>'"\\`]/g, "")
+    .replace(/[\x00-\x1F\x7F]/g, "")
+    .replace(/(\.)\1+/g, "$1")
+    .replace(/\.\./g, ".")
+    .trim()
+    .slice(0, 50);
+}
 
 export function extractPaymentReference(value) {
-  const raw = sanitizeText(value);
+  const raw = sanitizePaymentReference(value);
   if (!raw) return "";
 
   const referenceMatch = raw.match(/reference\s*:\s*([^\n\r]+)/i);
-  if (!referenceMatch) {
-    return raw;
+  const rawReference = referenceMatch
+    ? String(referenceMatch[1] || "").split(/orange money/i)[0]
+    : raw;
+
+  const cleaned = rawReference.replace(/["']/g, "").trim();
+
+  const segments = cleaned.split(".").map((s) => s.trim()).filter(Boolean);
+  if (segments.length > 1) {
+    const token = segments[segments.length - 1].match(/[A-Za-z0-9_-]+$/);
+    return sanitizePaymentReference(token?.[0] || segments[segments.length - 1]);
   }
 
-  const rawReference = String(referenceMatch[1] || "")
-    .split(/orange money/i)[0]
-    .replace(/["']/g, "")
-    .trim();
-
-  const segments = rawReference
-    .split(".")
-    .map((segment) => segment.trim())
-    .filter(Boolean);
-  if (!segments.length) {
-    return raw;
-  }
-
-  const candidate = segments[segments.length - 1];
-  const token = candidate.match(/[A-Za-z0-9_-]+$/);
-  return token?.[0] || candidate;
+  const token = cleaned.match(/[A-Za-z0-9_-]+$/);
+  return sanitizePaymentReference(token?.[0] || cleaned);
 }
 
 export function validateCheckoutForm(form) {

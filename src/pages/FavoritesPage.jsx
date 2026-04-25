@@ -27,7 +27,7 @@ export default function FavoritesPage() {
       {favoriteBooks.length === 0 && (
         <div className="card-surface flex flex-col items-center gap-4 p-10 text-center animate-fade-in">
           <span className="text-6xl" aria-hidden="true">♡</span>
-          <p className="max-w-sm text-sm leading-relaxed text-slate-500">
+          <p className="max-w-sm text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
             Parcourez le catalogue et appuyez sur le cœur pour sauvegarder vos livres préférés ici.
           </p>
           <Link

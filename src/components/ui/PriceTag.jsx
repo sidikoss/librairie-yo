@@ -6,7 +6,7 @@ export default function PriceTag({ price, discount = 0 }) {
 
   if (!discount) {
     return (
-      <p className="font-heading text-lg font-extrabold text-slate-900">
+      <p className="font-heading text-lg font-extrabold text-zinc-900 dark:text-white">
         {formatGNF(basePrice)}
       </p>
     );
@@ -17,7 +17,7 @@ export default function PriceTag({ price, discount = 0 }) {
       <p className="font-heading text-lg font-extrabold text-brand-600">
         {formatGNF(finalPrice)}
       </p>
-      <p className="text-xs font-medium text-slate-400 line-through">
+      <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500 line-through">
         {formatGNF(basePrice)}
       </p>
     </div>

@@ -241,13 +241,13 @@ export default function SecureReaderPage() {
 
       <section className="card-surface space-y-4 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-slate-600">{statusLabel}</p>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">{statusLabel}</p>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
               disabled={!canGoPrev || loading || Boolean(error) || !pdfLib}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-40"
+              className="rounded-lg border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300 disabled:opacity-40"
             >
               Page precedente
             </button>
@@ -255,7 +255,7 @@ export default function SecureReaderPage() {
               type="button"
               onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
               disabled={!canGoNext || loading || Boolean(error) || !pdfLib}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-40"
+              className="rounded-lg border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300 disabled:opacity-40"
             >
               Page suivante
             </button>

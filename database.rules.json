@@ -1,35 +1,80 @@
 {
   "rules": {
+    ".read": false,
+    ".write": false,
+    ".indexOn": ["status", "createdAt"],
+    
     "catalog": {
       ".read": true,
-      ".write": false
+      ".write": false,
+      ".indexOn": ["category"]
     },
+    
     "books": {
       ".read": true,
       ".write": false
     },
+    
     "book-files": {
-      ".read": "auth != null",
+      ".read": "auth != null && auth.uid === data.child('allowedUid').val()",
       ".write": false
     },
+    
+    // PROBLEME 3 FIX: Orders can only be read by owner or admin
     "orders": {
-      ".read": true,
+      ".read": "auth != null && (
+        // Owner can read their own orders
+        data.child('uid').val() === auth.uid ||
+        // OR owner can read by phone+pin combination (legacy support)
+        data.child('phone').val() === auth.token.phone ||
+        // OR admin with admin:true token
+        auth.token.admin === true
+      )",
       "$orderId": {
+        // Anyone can create new pending orders
         ".write": "!data.exists() && newData.hasChildren(['phone','items','status']) && newData.child('status').val() === 'pending'",
-        ".validate": "newData.hasChildren(['phone','items','status','createdAt'])"
+        // Validate required fields
+        ".validate": "newData.hasChildren(['phone','items','status','createdAt','total'])"
       }
     },
+    
+    // Payment references storage (server-side only)
+    "usedPaymentRefs": {
+      ".read": false, // Not exposed to clients
+      ".write": "auth != null && auth.token.admin === true" // Admin only
+    },
+    
     "promoCodes": {
-      ".read": true,
-      ".write": "auth != null"
+      ".read": "auth != null && auth.token.admin === true",
+      ".write": "auth != null && auth.token.admin === true",
+      "$promoId": {
+        ".validate": "newData.hasChildren(['code','discount']) || newData.child('.value').val() === null"
+      }
     },
+    
     "pending_orders": {
-      ".read": "auth != null",
-      ".write": "auth != null"
+      ".read": "auth != null && auth.token.admin === true",
+      ".write": "auth != null && auth.token.admin === true"
     },
+    
     "admin": {
-      ".read": "auth != null",
-      ".write": "auth != null"
+      ".read": "auth != null && auth.token.admin === true",
+      ".write": "auth != null && auth.token.admin === true"
+    },
+    
+    // Cache for catalog (read-only for all)
+    "cache": {
+      ".read": true,
+      ".write": "auth != null && auth.token.admin === true"
+    },
+    
+    // User sessions
+    "sessions": {
+      "$sessionId": {
+        ".read": "data.child('uid').val() === auth.uid",
+        ".write": "!data.exists() && newData.hasChildren(['uid','createdAt'])",
+        ".validate": "newData.child('uid').val() === auth.uid"
+      }
     }
   }
 }

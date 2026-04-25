@@ -240,10 +240,10 @@ export default function AdminPage() {
         <p className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-brand-600">
           Administration
         </p>
-        <h1 className="font-heading text-2xl font-extrabold text-slate-900">
+        <h1 className="font-heading text-2xl font-extrabold text-zinc-900">
           Connexion admin
         </h1>
-        <p className="mt-2 text-sm text-slate-600">
+        <p className="mt-2 text-sm text-zinc-600">
           Entrez le mot de passe pour gérer le catalogue et les commandes.
         </p>
         <input
@@ -252,7 +252,7 @@ export default function AdminPage() {
           onChange={(e) => { setPassword(e.target.value); setLoginError(""); }}
           onKeyDown={(e) => e.key === "Enter" && !loginBusy && handleLogin()}
           placeholder="Mot de passe"
-          className="mt-4 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-300 focus:ring"
+          className="mt-4 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm outline-none ring-brand-300 focus:ring"
           autoComplete="current-password"
         />
         {loginError && (
@@ -278,14 +278,14 @@ export default function AdminPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-brand-600">
             Administration
           </p>
-          <h1 className="font-heading text-2xl font-extrabold text-slate-900">
+          <h1 className="font-heading text-2xl font-extrabold text-zinc-900">
             Back-office Librairie YO
           </h1>
         </div>
         <div className="flex gap-2">
           <button
             onClick={refreshCatalog}
-            className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
+            className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-300"
           >
             {syncing ? "Sync..." : "Synchroniser"}
           </button>
@@ -305,7 +305,7 @@ export default function AdminPage() {
               key={id}
               onClick={() => setActiveTab(id)}
               className={`rounded-full px-4 py-2 text-sm font-semibold ${
-                activeTab === id ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600"
+                activeTab === id ? "bg-brand-600 text-white" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600"
               }`}
             >
               {label}
@@ -318,13 +318,13 @@ export default function AdminPage() {
       {activeTab === "stats" && (
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[
-            { label: "Livres",       value: books.length,           color: "text-slate-900" },
+            { label: "Livres",       value: books.length,           color: "text-zinc-900" },
             { label: "En attente",   value: pendingOrders.length,   color: "text-amber-600" },
             { label: "Approuvées",   value: approvedOrders.length,  color: "text-emerald-600" },
-            { label: "Revenus",      value: formatGNF(totalRevenue), color: "text-slate-900" },
+            { label: "Revenus",      value: formatGNF(totalRevenue), color: "text-zinc-900" },
           ].map(({ label, value, color }) => (
             <article key={label} className="card-surface p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
+              <p className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{label}</p>
               <p className={`mt-1 text-2xl font-extrabold ${color}`}>{value}</p>
             </article>
           ))}
@@ -335,7 +335,7 @@ export default function AdminPage() {
       {activeTab === "books" && (
         <section className="space-y-4">
           <article className="card-surface p-4">
-            <h2 className="font-heading text-lg font-bold text-slate-900">
+            <h2 className="font-heading text-lg font-bold text-zinc-900">
               {editingBookId ? "Modifier un livre" : "Ajouter un livre"}
             </h2>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -348,59 +348,59 @@ export default function AdminPage() {
                   value={value}
                   onChange={(e) => setBookDraft((p) => ({ ...p, [key]: e.target.value }))}
                   placeholder={placeholder}
-                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                  className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
                 />
               ))}
               <input type="number" value={bookDraft.pages}
                 onChange={(e) => setBookDraft((p) => ({ ...p, pages: e.target.value }))}
-                placeholder="Pages" className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Pages" className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
               />
               <select value={bookDraft.category}
                 onChange={(e) => setBookDraft((p) => ({ ...p, category: e.target.value }))}
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
               >
                 {categories.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
               <input value={bookDraft.image}
                 onChange={(e) => setBookDraft((p) => ({ ...p, image: e.target.value }))}
                 placeholder="Image URL (optionnel)"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm md:col-span-2"
+                className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm md:col-span-2"
               />
               <textarea value={bookDraft.description}
                 onChange={(e) => setBookDraft((p) => ({ ...p, description: e.target.value }))}
                 placeholder="Description"
-                className="min-h-24 rounded-xl border border-slate-300 px-3 py-2 text-sm md:col-span-2"
+                className="min-h-24 rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm md:col-span-2"
               />
               <input type="number" step="0.1" min="1" max="5" value={bookDraft.rating}
                 onChange={(e) => setBookDraft((p) => ({ ...p, rating: e.target.value }))}
-                placeholder="Note" className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Note" className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
               />
               <input type="number" min="0" value={bookDraft.discount}
                 onChange={(e) => setBookDraft((p) => ({ ...p, discount: e.target.value }))}
-                placeholder="Remise (GNF)" className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Remise (GNF)" className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
               />
               <input type="number" min="0" value={bookDraft.stock}
                 onChange={(e) => setBookDraft((p) => ({ ...p, stock: e.target.value }))}
-                placeholder="Stock" className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Stock" className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
               />
               <input type="number" min="0" value={bookDraft.manualPrice}
                 onChange={(e) => setBookDraft((p) => ({ ...p, manualPrice: e.target.value }))}
                 placeholder="Override prix manuel (optionnel)"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
               />
-              <label className="inline-flex items-center gap-2 text-sm text-slate-600">
+              <label className="inline-flex items-center gap-2 text-sm text-zinc-600">
                 <input type="checkbox" checked={bookDraft.manualPriceEnabled}
                   onChange={(e) => setBookDraft((p) => ({ ...p, manualPriceEnabled: e.target.checked }))}
                 /> Activer override manuel
               </label>
-              <label className="inline-flex items-center gap-2 text-sm text-slate-600">
+              <label className="inline-flex items-center gap-2 text-sm text-zinc-600">
                 <input type="checkbox" checked={bookDraft.featured}
                   onChange={(e) => setBookDraft((p) => ({ ...p, featured: e.target.checked }))}
                 /> Mettre en avant
               </label>
               <input type="file" accept=".pdf,.epub,.txt"
                 onChange={handleBookFileChange}
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm md:col-span-2"
+                className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm md:col-span-2"
               />
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -410,7 +410,7 @@ export default function AdminPage() {
                 {savingBook ? "Sauvegarde..." : editingBookId ? "Mettre à jour" : "Ajouter"}
               </button>
               <button onClick={resetBookForm}
-                className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700"
+                className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-2.5 text-sm font-medium text-zinc-700 dark:text-zinc-300"
               >Réinitialiser</button>
             </div>
           </article>
@@ -418,7 +418,7 @@ export default function AdminPage() {
           <article className="card-surface p-4">
             <input value={bookQuery} onChange={(e) => setBookQuery(e.target.value)}
               placeholder="Rechercher un livre..."
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
             />
             <div className="mt-3 space-y-2">
               {filteredBooks.map((book) => (
@@ -427,15 +427,15 @@ export default function AdminPage() {
                 >
                   <div>
                     <p className="font-semibold text-slate-800">{book.title}</p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
                       {book.author} · {book.category} · {book.pages} pages
                     </p>
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => handleBookEdit(book)}
-                      className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700"
+                      className="rounded-lg border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300"
                     >Modifier</button>
-                    <button onClick={() => removeBook(book.id)}
+                    <button onClick={() => { if (window.confirm("Êtes-vous sûr de vouloir supprimer ce livre ? Cette action est irréversible.")) removeBook(book.id); }}
                       className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-medium text-rose-700"
                     >Supprimer</button>
                   </div>
@@ -451,22 +451,22 @@ export default function AdminPage() {
         <section className="card-surface p-4">
           <input value={orderQuery} onChange={(e) => setOrderQuery(e.target.value)}
             placeholder="Rechercher commande (nom, téléphone, transaction)"
-            className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+            className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
           />
           <div className="mt-3 space-y-2">
             {filteredOrders.map((order) => (
               <article key={order.fbKey} className="rounded-xl border border-slate-200 p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm font-semibold text-slate-800">{order.name}</p>
-                  <span className="text-xs text-slate-500">
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
                     {order.createdAt ? new Date(order.createdAt).toLocaleString("fr-FR") : "Date inconnue"}
                   </span>
                 </div>
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                   {order.phone} · Ref: {order.referencePaiement || order.txId || "N/A"} · Total: {formatGNF(order.total)}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
+                  <span className="rounded-full bg-zinc-100 dark:bg-zinc-800 px-2 py-1 text-xs font-medium text-zinc-600">
                     Statut: {order.status}
                   </span>
                   {order.status === "pending" && (
@@ -483,7 +483,7 @@ export default function AdminPage() {
               </article>
             ))}
           </div>
-          <div className="mt-4 text-xs text-slate-500">
+          <div className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">
             Rejetées: {rejectedOrders.length}
           </div>
         </section>
@@ -493,23 +493,23 @@ export default function AdminPage() {
       {activeTab === "promos" && (
         <section className="space-y-3">
           <article className="card-surface p-4">
-            <h2 className="font-heading text-lg font-bold text-slate-900">
+            <h2 className="font-heading text-lg font-bold text-zinc-900">
               Créer un code promo
             </h2>
             <div className="mt-3 grid gap-3 md:grid-cols-4">
               <input value={promoDraft.code}
                 onChange={(e) => setPromoDraft((p) => ({ ...p, code: e.target.value.toUpperCase() }))}
                 placeholder="Code"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
               />
               <input type="number" value={promoDraft.discount}
                 onChange={(e) => setPromoDraft((p) => ({ ...p, discount: e.target.value }))}
                 placeholder="Réduction"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
               />
               <select value={promoDraft.type}
                 onChange={(e) => setPromoDraft((p) => ({ ...p, type: e.target.value }))}
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
               >
                 <option value="percent">% Pourcentage</option>
                 <option value="fixed">Montant fixe</option>
@@ -517,7 +517,7 @@ export default function AdminPage() {
               <input type="number" value={promoDraft.maxUses}
                 onChange={(e) => setPromoDraft((p) => ({ ...p, maxUses: e.target.value }))}
                 placeholder="Utilisations max"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
               />
             </div>
             <button onClick={handleCreatePromo}
@@ -533,14 +533,14 @@ export default function AdminPage() {
                 >
                   <div>
                     <p className="font-semibold text-slate-800">{promo.code}</p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
                       {promo.type === "percent" ? `${promo.discount}%` : formatGNF(promo.discount)}
                       {" · "}{promo.uses || 0}/{promo.maxUses || "∞"}
                     </p>
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => togglePromo(promo)}
-                      className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700"
+                      className="rounded-lg border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300"
                     >{promo.active ? "Désactiver" : "Activer"}</button>
                     <button onClick={() => removePromo(promo.fbKey)}
                       className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-medium text-rose-700"

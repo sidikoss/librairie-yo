@@ -9,6 +9,11 @@
 // → 401 { ok: false, error: "..." }           si incorrect
 
 import { createHmac, timingSafeEqual } from "crypto";
+import { withRateLimit } from "./_lib/rateLimiter";
+import { applySecurityHeaders } from "./_lib/securityHeaders";
+import { validateAdminAuth } from "./_lib/schemaValidator";
+import { sanitizeRequestBody } from "./_lib/sanitization";
+import { logSecurityEvent, securityMiddleware, detectBruteForce } from "./_lib/securityMonitor";
 
 const SESSION_DURATION_MS = 2 * 60 * 60 * 1000; // 2 h
 
@@ -18,11 +23,6 @@ function getSecret() {
   return secret;
 }
 
-/**
- * Génère un token HMAC-SHA256 simple :
- *   base64( JSON({exp}) ).base64( HMAC(payload, ADMIN_PASSWORD) )
- * Pas de dépendance externe.
- */
 function signToken(secret) {
   const exp = Date.now() + SESSION_DURATION_MS;
   const payload = Buffer.from(JSON.stringify({ exp })).toString("base64url");
@@ -57,7 +57,6 @@ function compareSafe(a, b) {
     const bufA = Buffer.from(a);
     const bufB = Buffer.from(b);
     if (bufA.length !== bufB.length) {
-      // Toujours effectuer la comparaison pour éviter le timing attack
       timingSafeEqual(bufA, bufA);
       return false;
     }
@@ -67,10 +66,30 @@ function compareSafe(a, b) {
   }
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
+  applySecurityHeaders(res);
+  securityMiddleware(req, res, () => {});
+
+  const clientIP = req.headers['x-forwarded-for']?.split(',')[0]?.trim()
+    || req.headers['x-real-ip']
+    || req.socket?.remoteAddress
+    || 'unknown';
+
+  const bruteForceCheck = detectBruteForce(clientIP, '/api/admin-auth');
+  if (bruteForceCheck.isBruteForcing) {
+    logSecurityEvent('BRUTE_FORCE_DETECTED', req, {
+      attempts: bruteForceCheck.attempts,
+      ip: clientIP,
+    });
+    return res.status(429).json({
+      ok: false,
+      error: 'Trop de tentatives. Veuillez réessayer plus tard.',
+      code: 'BRUTE_FORCE_DETECTED',
+    });
+  }
+
   res.setHeader("Cache-Control", "no-store");
 
-  // Health check
   if (req.method === "GET") {
     return res.status(200).json({ ok: true, service: "admin-auth" });
   }
@@ -80,15 +99,24 @@ export default async function handler(req, res) {
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
-  let body = req.body;
-  if (typeof body === "string") {
-    try { body = JSON.parse(body); } catch {
-      return res.status(400).json({ ok: false, error: "JSON invalide" });
-    }
+  const sanitizedBody = sanitizeRequestBody(req.body);
+  
+  let validationResult;
+  try {
+    validationResult = validateAdminAuth(sanitizedBody);
+  } catch (error) {
+    logSecurityEvent('VALIDATION_ERROR', req, { error: error.message });
+    return res.status(400).json({
+      ok: false,
+      error: error.message || 'Données invalides',
+      field: error.field,
+    });
   }
 
-  const provided = String(body?.password || "");
+  const provided = String(validationResult.password || "");
+
   if (!provided) {
+    logSecurityEvent('AUTH_FAILURE', req, { reason: 'empty_password' });
     return res.status(400).json({ ok: false, error: "Mot de passe requis" });
   }
 
@@ -101,11 +129,21 @@ export default async function handler(req, res) {
   }
 
   if (!compareSafe(provided, secret)) {
-    // Délai fixe pour éviter le brute-force timing
+    logSecurityEvent('AUTH_FAILURE', req, {
+      reason: 'invalid_password',
+      ip: clientIP,
+    });
     await new Promise((r) => setTimeout(r, 300));
     return res.status(401).json({ ok: false, error: "Mot de passe incorrect" });
   }
 
+  logSecurityEvent('AUTH_SUCCESS', req, { ip: clientIP });
+
   const token = signToken(secret);
   return res.status(200).json({ ok: true, token });
 }
+
+export default withRateLimit(handler, "/api/admin-auth", {
+  maxRequests: 5,
+  windowMs: 60000
+});

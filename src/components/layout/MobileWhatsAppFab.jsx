@@ -18,7 +18,7 @@ export default function MobileWhatsAppFab() {
         </svg>
       </a>
       {/* Tooltip */}
-      <span className="pointer-events-none absolute right-16 top-1/2 hidden -translate-y-1/2 rounded-xl border border-slate-200/80 bg-white/95 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-md backdrop-blur-sm transition-opacity md:inline-flex">
+      <span className="pointer-events-none absolute right-16 top-1/2 hidden -translate-y-1/2 rounded-xl border border-zinc-200/80 bg-white/95 px-3 py-1.5 text-xs font-semibold text-zinc-700 shadow-md backdrop-blur-sm transition-opacity md:inline-flex dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
         WhatsApp
       </span>
     </div>

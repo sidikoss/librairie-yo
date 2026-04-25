@@ -8,6 +8,7 @@
       name="description"
       content="Librairie digitale en Guinée. Achetez des livres de qualité avec paiement Orange Money et livraison rapide. Romans, sciences, informatique et plus."
     />
+    <link rel="canonical" href="https://librairie-yo-gui.vercel.app/" />
     
     <!-- SEO Meta Tags -->
     <meta name="keywords" content="librairie, livres, Guinée, Conakry, achat livres, Orange Money, lecture, romans, sciences, informatique" />
@@ -16,17 +17,17 @@
     
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://librairie-yo.vercel.app/" />
+    <meta property="og:url" content="https://librairie-yo-gui.vercel.app/" />
     <meta property="og:title" content="Librairie YO | Vente de livres en Guinée" />
     <meta property="og:description" content="Librairie digitale en Guinée. Achetez des livres de qualité avec paiement Orange Money et livraison rapide." />
-    <meta property="og:image" content="/og-image.png" />
+    <meta property="og:image" content="https://librairie-yo-gui.vercel.app/og-image.png" />
     <meta property="og:locale" content="fr_GN" />
     
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Librairie YO | Vente de livres en Guinée" />
     <meta name="twitter:description" content="Librairie digitale en Guinée. Achetez des livres de qualité avec paiement Orange Money et livraison rapide." />
-    <meta name="twitter:image" content="/og-image.png" />
+    <meta name="twitter:image" content="https://librairie-yo-gui.vercel.app/og-image.png" />
     
     <!-- Theme & Icons -->
     <meta name="theme-color" content="#1e40af" />
@@ -36,15 +37,50 @@
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/favicon.png" />
     
-    <!-- Google Fonts -->
+    <!-- Resource Hints -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet" />
-    
-    <!-- Preconnect -->
+    <link rel="preconnect" href="https://firebasestorage.googleapis.com" />
+    <link rel="preconnect" href="https://www.google-analytics.com" />
     <link rel="dns-prefetch" href="https://librairie-yo-default-rtdb.firebaseio.com" />
+    
+    <!-- Google Fonts with font-display swap for performance -->
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+    <noscript>
+      <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet" />
+    </noscript>
+    
+    <!-- Dark mode initial state (prevent flash) -->
+    <script>
+      (function() {
+        const savedTheme = localStorage.getItem('theme');
+        const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        const theme = savedTheme || systemTheme;
+        if (theme === 'dark') {
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
+    
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BookStore",
+      "name": "Librairie YO",
+      "description": "Librairie digitale en République de Guinée",
+      "url": "https://librairie-yo-gui.vercel.app",
+      "areaServed": {
+        "@type": "Country",
+        "name": "Guinée"
+      },
+      "priceRange": "GNF",
+      "paymentAccepted": ["Orange Money", "Mobile Money"],
+      "sameAs": []
+    }
+    </script>
   </head>
-  <body>
+  <body class="antialiased">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

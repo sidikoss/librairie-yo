@@ -1,6 +1,7 @@
+import { memo } from "react";
 import BookCard from "./BookCard";
 
-export default function BookGrid({
+const BookGrid = memo(function BookGrid({
   books,
   onAddToCart,
   onToggleFavorite,
@@ -9,9 +10,9 @@ export default function BookGrid({
 }) {
   if (!books.length) {
     return (
-      <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-white/60 p-10 text-center backdrop-blur-sm">
+      <div className="rounded-2xl border-2 border-dashed border-zinc-200 bg-white/60 p-10 text-center backdrop-blur-sm dark:border-zinc-700 dark:bg-zinc-800/60">
         <span className="mb-3 block text-4xl" aria-hidden="true">📚</span>
-        <p className="text-sm text-slate-500">{emptyMessage}</p>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">{emptyMessage}</p>
       </div>
     );
   }
@@ -34,4 +35,6 @@ export default function BookGrid({
       ))}
     </div>
   );
-}
+});
+
+export default BookGrid;

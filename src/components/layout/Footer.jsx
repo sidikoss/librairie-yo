@@ -12,9 +12,9 @@ export default function Footer() {
   const year = new Date().getFullYear();
   const { isInstallable, installPWA } = usePWAInstall();
   return (
-    <footer className="relative mt-16 overflow-hidden border-t border-slate-200/50">
+    <footer className="relative mt-16 overflow-hidden border-t border-zinc-200/50 dark:border-zinc-800/50">
       {/* Gradient background */}
-      <div className="absolute inset-0 bg-gradient-to-b from-white/80 via-slate-50/50 to-slate-100/80 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-gradient-to-b from-white/80 via-zinc-50/50 to-zinc-100/80 dark:from-zinc-900/80 dark:via-zinc-800/50 dark:to-zinc-800/80 backdrop-blur-sm" />
 
       <div className="relative mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:grid-cols-2 lg:grid-cols-4">
         {/* Brand */}
@@ -25,11 +25,11 @@ export default function Footer() {
               <span className="h-3 w-3 rounded-full bg-accent-500" aria-hidden="true" />
               <span className="h-3 w-3 rounded-full bg-guinea-500" aria-hidden="true" />
             </div>
-            <span className="pl-0.5 font-heading text-base font-extrabold text-slate-900">
+            <span className="pl-0.5 font-heading text-base font-extrabold text-zinc-900 dark:text-white">
               {APP_NAME}
             </span>
           </div>
-          <p className="mt-3 text-sm leading-relaxed text-slate-500">
+          <p className="mt-3 text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
             Librairie digitale en Guinée. Achat simple, paiement sécurisé, livraison rapide.
           </p>
           <div className="mt-4 flex items-center gap-1">
@@ -54,7 +54,7 @@ export default function Footer() {
               <li key={link.to}>
                 <Link
                   to={link.to}
-                  className="link-animated text-sm text-slate-600 transition-colors duration-300 hover:text-brand-600"
+                  className="link-animated text-sm text-zinc-600 transition-colors duration-300 hover:text-brand-600 dark:text-zinc-400 dark:hover:text-brand-400"
                 >
                   {link.label}
                 </Link>
@@ -74,7 +74,7 @@ export default function Footer() {
                 href={buildWhatsAppUrl("Bonjour Librairie YO !")}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-sm text-slate-600 transition-colors duration-300 hover:text-guinea-600"
+                className="inline-flex items-center gap-2 text-sm text-zinc-600 transition-colors duration-300 hover:text-guinea-600 dark:text-zinc-400 dark:hover:text-guinea-400"
               >
                 <svg viewBox="0 0 24 24" className="h-4 w-4 fill-guinea-500" aria-hidden="true">
                   <path d="M19.05 4.94A9.94 9.94 0 0 0 12 2C6.48 2 2 6.48 2 12c0 1.77.46 3.51 1.34 5.04L2 22l5.1-1.33A9.95 9.95 0 0 0 12 22c5.52 0 10-4.48 10-10 0-2.67-1.04-5.18-2.95-7.06ZM12 20.1c-1.52 0-3-.4-4.31-1.16l-.31-.18-3.03.79.81-2.95-.2-.31A8.03 8.03 0 0 1 4 12a8 8 0 1 1 8 8.1Z"/>
@@ -82,7 +82,7 @@ export default function Footer() {
                 {formatPhone(WA_NUMBER)}
               </a>
             </li>
-            <li className="flex items-center gap-2 text-sm text-slate-600">
+            <li className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
               <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-orange-500 text-[8px] font-bold text-white" aria-hidden="true">
                 OM
               </span>
@@ -102,7 +102,7 @@ export default function Footer() {
               { icon: "🚀", text: "Livraison rapide en Guinée" },
               { icon: "📱", text: "Suivi de commande" },
             ].map((item) => (
-              <li key={item.text} className="flex items-center gap-2 text-sm text-slate-600">
+              <li key={item.text} className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
                 <span aria-hidden="true">{item.icon}</span>
                 {item.text}
               </li>
@@ -111,11 +111,11 @@ export default function Footer() {
         </div>
       </div>
 
-      {/* App Install Button */}
+{/* App Install Button */}
       {isInstallable && (
-        <div className="relative border-t border-slate-200/50 bg-brand-50/50">
+        <div className="relative border-t border-zinc-200/50 bg-brand-50/50 dark:border-zinc-800/50 dark:bg-brand-900/20">
           <div className="mx-auto flex max-w-6xl flex-col items-center justify-center gap-3 px-4 py-6 text-center sm:flex-row">
-            <p className="text-sm font-semibold text-slate-700">
+            <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
               Profitez d'une meilleure expérience sur votre mobile
             </p>
             <button
@@ -132,8 +132,8 @@ export default function Footer() {
       )}
 
       {/* Copyright bar */}
-      <div className="relative border-t border-slate-200/50">
-        <p className="mx-auto max-w-6xl px-4 py-5 text-center text-xs text-slate-400">
+      <div className="relative border-t border-zinc-200/50 dark:border-zinc-800/50">
+        <p className="mx-auto max-w-6xl px-4 py-5 text-center text-xs text-zinc-400">
           © {year} {APP_NAME}. Tous droits réservés. 🇬🇳 Fait avec ♥ en Guinée
         </p>
       </div>

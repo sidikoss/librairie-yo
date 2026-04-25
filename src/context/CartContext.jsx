@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo } from "react";
+import { createContext, useContext, useEffect, useMemo, useCallback } from "react";
 import { STORAGE_KEYS } from "../config/constants";
 import { useLocalStorageState } from "../hooks/useLocalStorageState";
 import { calculateCartTotal } from "../features/checkout/cartMath";
@@ -46,7 +46,7 @@ export function CartProvider({ children }) {
     });
   }, [setItems]);
 
-  const addItem = (book) => {
+  const addItem = useCallback((book) => {
     setItems((prev) => {
       const existing = prev.find((item) => item.bookId === book.id);
       if (existing) {
@@ -67,13 +67,13 @@ export function CartProvider({ children }) {
         },
       ];
     });
-  };
+  }, [setItems]);
 
-  const removeItem = (bookId) => {
+  const removeItem = useCallback((bookId) => {
     setItems((prev) => prev.filter((item) => item.bookId !== bookId));
-  };
+  }, [setItems]);
 
-  const updateQuantity = (bookId, qty) => {
+  const updateQuantity = useCallback((bookId, qty) => {
     if (Number(qty || 0) <= 0) {
       removeItem(bookId);
       return;
@@ -86,9 +86,9 @@ export function CartProvider({ children }) {
           : item,
       ),
     );
-  };
+  }, [setItems, removeItem]);
 
-  const clearCart = () => setItems([]);
+  const clearCart = useCallback(() => setItems([]), [setItems]);
 
   const total = useMemo(
     () => calculateCartTotal(items),
@@ -100,15 +100,18 @@ export function CartProvider({ children }) {
     [items],
   );
 
-  const value = {
-    items,
-    count,
-    total,
-    addItem,
-    removeItem,
-    updateQuantity,
-    clearCart,
-  };
+  const value = useMemo(
+    () => ({
+      items,
+      count,
+      total,
+      addItem,
+      removeItem,
+      updateQuantity,
+      clearCart,
+    }),
+    [items, count, total, addItem, removeItem, updateQuantity, clearCart],
+  );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'robots.txt', 'apple-touch-icon.png'],
+      includeAssets: ['favicon.png', 'robots.txt', 'pwa-192x192.png'],
       manifest: {
         name: 'Librairie YO',
         short_name: 'LibYO',
@@ -64,10 +64,42 @@ export default defineConfig({
             icons: [{ src: "pwa-192x192.png", sizes: "192x192" }]
           }
         ]
+      },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}'],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-cache',
+              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [0, 200] }
+            }
+          },
+          {
+            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'gstatic-fonts-cache',
+              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [0, 200] }
+            }
+          },
+          {
+            urlPattern: /^https:\/\/firebasestorage\.googleapis\.com\/.*/i,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'firebase-storage-cache',
+              expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] }
+            }
+          }
+        ]
       }
     }),
     Sitemap({
-      hostname: 'https://librairie-yo.vercel.app',
+      hostname: 'https://librairie-yo-gui.vercel.app',
       dynamicRoutes: [
         '/',
         '/catalogue',
@@ -87,29 +119,65 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 5000,
     allowedHosts: true,
+    headers: {
+      'Cache-Control': 'public, max-age=31536000, immutable',
+    },
   },
   build: {
-    chunkSizeWarningLimit: 500,
+    target: 'esnext',
+    chunkSizeWarningLimit: 600,
     cssCodeSplit: true,
     sourcemap: false,
+    minify: 'esbuild',
+    compressPublicAssets: true,
+    reportCompressedSize: true,
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes("node_modules/react") || id.includes("node_modules/react-dom")) {
-            return "vendor-react";
+          if (id.includes('node_modules/react')) {
+            return 'vendor-react';
           }
-          if (id.includes("node_modules/react-router-dom")) {
-            return "vendor-router";
+          if (id.includes('node_modules/react-dom')) {
+            return 'vendor-react';
+          }
+          if (id.includes('node_modules/react-router-dom')) {
+            return 'vendor-router';
+          }
+          if (id.includes('node_modules/firebase')) {
+            return 'vendor-firebase';
+          }
+          if (id.includes('node_modules/pdfjs-dist')) {
+            return 'vendor-pdf';
+          }
+          if (id.includes('node_modules/@vercel')) {
+            return 'vendor-vercel';
+          }
+          if (id.includes('node_modules/workbox')) {
+            return 'vendor-pwa';
           }
         },
+        chunkFileNames: 'assets/js/[name]-[hash].js',
+        entryFileNames: 'assets/js/[name]-[hash].js',
+        assetFileNames: 'assets/[ext]/[name]-[hash].[ext]',
+        compactChunks: true,
       },
     },
   },
   optimizeDeps: {
-    include: ["react", "react-dom", "react-router-dom"],
+    include: ['react', 'react-dom', 'react-router-dom'],
+    exclude: ['pdfjs-dist'],
+    esbuildOptions: {
+      target: 'esnext',
+    },
   },
+  appType: 'spa',
+  esbuild: {
+    legalComments: 'none',
+    drop: ['console', 'debugger'],
+  },
+
   test: {
-    environment: "jsdom",
+    environment: 'jsdom',
     globals: true,
   },
 });
