@@ -39,11 +39,6 @@ export function validateCheckoutForm(form) {
   }
 
   if (form.mode === "whatsapp") {
-    const referencePaiement = extractPaymentReference(form.txId);
-    if (!referencePaiement) {
-      errors.txId = "Référence de transaction requise";
-    }
-
     if (!/^\d{4}$/.test(String(form.pin || ""))) {
       errors.pin = "PIN à 4 chiffres requis";
     }

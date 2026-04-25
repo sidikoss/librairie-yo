@@ -8,6 +8,7 @@ import { validateCheckoutForm } from "../features/checkout/checkoutValidation";
 import { buildCartWhatsAppUrl } from "../features/whatsapp/whatsapp";
 import { ensureReaderSession } from "../services/firebaseClient";
 import { formatGNF, normalizePhone } from "../utils/format";
+import { OM_NUMBER } from "../config/constants";
 
 function resolvePromo(promoCodes, code, subTotal) {
   const c = String(code || "").trim().toUpperCase();
@@ -21,7 +22,7 @@ function resolvePromo(promoCodes, code, subTotal) {
 export default function CheckoutPage() {
   const { items, total, clearCart } = useCart();
   const { submitOrder, promoCodes } = useCatalog();
-  const [form, setForm] = useState({ name: "", phone: "", pin: "", promoCode: "" });
+  const [form, setForm] = useState({ name: "", phone: "", pin: "", promoCode: "", txId: "" });
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [successPayload, setSuccessPayload] = useState(null);
@@ -47,14 +48,8 @@ export default function CheckoutPage() {
 
   const chg = (f, v) => { setForm((p) => ({ ...p, [f]: v })); setErrors((p) => ({ ...p, [f]: "" })); setPaymentError(""); };
 
-  const launchWA = () => {
-    const e = validateCheckoutForm({ ...form, txId: "WHATSAPP", mode: "whatsapp" });
-    if (Object.keys(e).length) { setErrors(e); return; }
-    window.open(buildCartWhatsAppUrl(items, { name: form.name, phone: form.phone, txId: "WHATSAPP" }), "_blank", "noopener,noreferrer");
-  };
-
-  const processPayment = async () => {
-    const e = validateCheckoutForm({ ...form, txId: "API", mode: "whatsapp" });
+  const launchWA = async () => {
+    const e = validateCheckoutForm({ ...form, txId: form.txId || "OM_REF", mode: "whatsapp" });
     if (Object.keys(e).length) { setErrors(e); return; }
     setSubmitting(true);
     setPaymentError("");
@@ -62,60 +57,28 @@ export default function CheckoutPage() {
       let uid = "";
       try { const s = await ensureReaderSession(); uid = s?.uid || ""; } catch {}
       
-      // 1. Sauvegarder la commande en 'pending'
       const orderPayload = {
         name: form.name.trim(),
         phone: normalizePhone(form.phone),
         uid: uid || null,
-        txId: "PENDING_PAYCARD", // Sera mis à jour par le webhook
-        referencePaiement: "PENDING_PAYCARD",
+        txId: form.txId || "OM_PENDING",
+        referencePaiement: form.txId || "OM_PENDING",
         pin: form.pin.trim(),
         originalTotal: total,
         discount,
         total: finalTotal,
         promoCode: promo?.code || null,
-        status: "pending", // Force pending status
+        status: "pending",
         items: items.map((i) => ({ bookId: i.bookId, fbKey: i.bookId, title: i.title, qty: 1, price: Number(i.unitPrice || 0) }))
       };
       
-      const orderId = await submitOrder(orderPayload);
-      
-      // 2. Initialiser le paiement paycard via notre API backend
-      const response = await fetch('/api/paycard-init', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId,
-          amount: finalTotal,
-          phone: normalizePhone(form.phone),
-          name: form.name.trim(),
-          description: `Paiement Librairie YO - Commande ${orderId}`
-        })
-      });
-
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || "Erreur lors de l'initialisation du paiement paycard.");
-      }
-
-      // 3. Rediriger l'utilisateur vers la page de paiement paycard
-      if (data.paymentUrl) {
-        // Sauvegarder les infos pour l'écran de retour
-        sessionStorage.setItem("pendingOrderPin", form.pin.trim());
-        sessionStorage.setItem("pendingOrderPhone", normalizePhone(form.phone));
-        sessionStorage.setItem("pendingOrderId", orderId);
-        
-        window.location.href = data.paymentUrl;
-      } else {
-        // Fallback simulation (si l'API paycard n'est pas configurée)
-        setSuccessPayload({ orderId, pin: form.pin.trim(), phone: normalizePhone(form.phone) });
-        clearCart();
-      }
-
+      await submitOrder(orderPayload);
+      window.open(buildCartWhatsAppUrl(items, { name: form.name, phone: form.phone, txId: form.txId }), "_blank", "noopener,noreferrer");
+      setSuccessPayload({ orderId: orderPayload.name, pin: form.pin.trim(), phone: normalizePhone(form.phone) });
+      clearCart();
     } catch (err) {
       console.error(err);
-      setPaymentError(err.message || "Impossible de contacter paycard. Veuillez utiliser WhatsApp en secours.");
+      setPaymentError(err.message || "Erreur lors de la commande WhatsApp.");
     } finally { 
       setSubmitting(false); 
     }
@@ -125,9 +88,9 @@ export default function CheckoutPage() {
     <div className="space-y-6">
       <SEO 
         title="Finaliser la commande" 
-        description="Paiement sécurisé via Orange Money ou paycard pour vos livres sur Librairie YO." 
+        description="Paiement sécurisé via Orange Money pour vos livres sur Librairie YO." 
       />
-      <SectionHeader eyebrow="Checkout" title="Paiement Sécurisé" description="Réglez facilement par carte bancaire ou Mobile Money via paycard." />
+      <SectionHeader eyebrow="Checkout" title="Paiement Sécurisé" description="Réglez facilement par Orange Money ou WhatsApp." />
 
       {successPayload ? (
         <section className="card-surface overflow-hidden animate-scale-in">
@@ -152,9 +115,9 @@ export default function CheckoutPage() {
           <div className="card-surface p-6 animate-fade-in-up">
             <h3 className="flex items-center gap-2 font-heading text-lg font-bold text-slate-900">
               <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-brand-100 text-sm" aria-hidden="true">💳</span>
-              paiement via paycard
+              Paiement via Orange Money
             </h3>
-            <p className="mt-1 text-xs text-slate-500">Saisissez vos informations pour accéder au paiement.</p>
+            <p className="mt-1 text-xs text-slate-500">Entrez votre référence de transaction Orange Money.</p>
             
             <div className="mt-6 space-y-4">
               <div className="space-y-3">
@@ -163,6 +126,9 @@ export default function CheckoutPage() {
                 
                 <input value={form.phone} onChange={(e) => chg("phone", e.target.value)} placeholder="+224 6XX XXX XXX" className="input-premium w-full" />
                 {errors.phone && <p className="text-xs text-brand-500">{errors.phone}</p>}
+                
+                <input value={form.txId || ""} onChange={(e) => chg("txId", e.target.value)} placeholder="Référence transaction Orange Money (ex: A58452)" className="input-premium w-full" />
+                {errors.txId && <p className="text-xs text-brand-500">{errors.txId}</p>}
                 
                 <div>
                   <input type="password" maxLength={4} value={form.pin} onChange={(e) => chg("pin", e.target.value.replace(/[^\d]/g, ""))} placeholder="Créez un PIN secret (4 chiffres)" className="input-premium w-full" />
@@ -176,22 +142,20 @@ export default function CheckoutPage() {
                   </div>
                 )}
                 
-                <button onClick={processPayment} disabled={submitting} className="w-full rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 px-5 py-4 text-sm font-bold text-white shadow-lg transition-all hover:-translate-y-0.5 disabled:opacity-60">
-                  {submitting ? "Redirection vers paycard..." : `Payer en ligne • ${formatGNF(finalTotal)}`}
+                <button onClick={launchWA} disabled={submitting} className="w-full rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 px-5 py-4 text-sm font-bold text-white shadow-lg transition-all hover:-translate-y-0.5 disabled:opacity-60">
+                  {submitting ? "Traitement en cours..." : `Valider ma commande • ${formatGNF(finalTotal)}`}
                 </button>
               </div>
             </div>
 
-            {/* Fallback WhatsApp comme demandé */}
-            <div className="mt-8 border-t border-slate-100 pt-6">
-              <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-4 text-center">
-                <p className="text-sm font-semibold text-slate-700">Impossible de payer en ligne ?</p>
-                <p className="mt-1 text-xs text-slate-500">Contactez un conseiller pour payer manuellement</p>
-                <button onClick={launchWA} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#25D366] px-4 py-2.5 text-sm font-bold text-white shadow-md transition-all hover:-translate-y-0.5 hover:bg-[#1ebd59]">
-                  <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 fill-current"><path d="M19.05 4.94A9.94 9.94 0 0 0 12 2C6.48 2 2 6.48 2 12c0 1.77.46 3.51 1.34 5.04L2 22l5.1-1.33A9.95 9.95 0 0 0 12 22c5.52 0 10-4.48 10-10 0-2.67-1.04-5.18-2.95-7.06ZM12 20.1c-1.52 0-3-.4-4.31-1.16l-.31-.18-3.03.79.81-2.95-.2-.31A8.03 8.03 0 0 1 4 12a8 8 0 1 1 8 8.1Z" /></svg>
-                  Finaliser via WhatsApp (Secours)
-                </button>
-              </div>
+            <div className="mt-6 bg-orange-50 border border-orange-200 rounded-xl p-4">
+              <p className="text-sm text-orange-800 font-medium">💡 Comment payer par Orange Money ?</p>
+              <ol className="mt-2 text-xs text-orange-700 space-y-1 list-decimal list-inside">
+                <li>Ouvrez votre application Orange Money</li>
+                <li>Envoyez le montant de <strong>{formatGNF(finalTotal)}</strong> au {OM_NUMBER}</li>
+                <li>Copiez la référence de transaction (ex: A58452)</li>
+                <li>Contactez-nous sur WhatsApp après validation</li>
+              </ol>
             </div>
           </div>
 

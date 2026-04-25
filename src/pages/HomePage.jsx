@@ -29,7 +29,7 @@ export default function HomePage() {
     <div className="space-y-10">
       <SEO 
         title="Accueil" 
-        description="Achetez vos livres rapidement en Guinée avec paiement Orange Money, paycard et livraison. Catalogue mobile et complet." 
+        description="Achetez vos livres rapidement en Guinée avec paiement Orange Money et livraison. Catalogue mobile et complet." 
       />
       <HeroSection />
 

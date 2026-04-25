@@ -9,7 +9,7 @@ export default function SEO({
   url = "https://librairie-yo.vercel.app" 
 }) {
   const fullTitle = title ? `${title} | ${APP_NAME}` : APP_NAME;
-  const defaultDescription = "Librairie digitale en Guinée. Achetez des livres de qualité avec paiement Orange Money, paycard et livraison rapide.";
+  const defaultDescription = "Librairie digitale en Guinée. Achetez des livres de qualité avec paiement Orange Money et livraison rapide.";
   const metaDescription = description || defaultDescription;
 
   return (
