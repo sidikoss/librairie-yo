@@ -12,7 +12,11 @@ export function sanitizeText(value) {
 
 export function normalizePhone(value) {
   if (value == null) return "";
-  return String(value).replace(/[^\d]/g, "");
+  let cleaned = String(value).replace(/[^\d]/g, "");
+  if (cleaned.startsWith("224")) return cleaned;
+  if (cleaned.startsWith("0")) return "224" + cleaned.slice(1);
+  if (cleaned.length === 9) return "224" + cleaned;
+  return cleaned;
 }
 
 export function isValidPhone(value) {
