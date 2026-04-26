@@ -1,0 +1,97 @@
+{
+  "name": "Librairie YO - Daily Sales Report to Telegram",
+  "nodes": [
+    {
+      "id": "0d3318a9-2dfa-4db5-932f-75f9e8f8ea01",
+      "name": "Daily Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [260, 280],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 20,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "cae967ef-bf6d-4ea1-8755-f0164e581f02",
+      "name": "Fetch Orders",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [520, 280],
+      "parameters": {
+        "url": "={{ $env.FIREBASE_DB_URL }}/orders.json",
+        "method": "GET",
+        "options": {}
+      }
+    },
+    {
+      "id": "4d4ecb34-c2fd-43b1-9911-019691df8203",
+      "name": "Compute Daily Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [780, 280],
+      "parameters": {
+        "jsCode": "const raw = $json || {};\nconst orders = Object.entries(raw).map(([id, value]) => ({ ...(value || {}), fbKey: id }));\n\nconst start = new Date();\nstart.setHours(0, 0, 0, 0);\nconst dayStart = start.getTime();\n\nconst todayOrders = orders.filter((order) => Number(order.createdAt || 0) >= dayStart);\n\nconst byStatus = { pending: 0, approved: 0, rejected: 0 };\nlet revenueApproved = 0;\n\nfor (const order of todayOrders) {\n  const status = String(order.status || 'pending');\n  if (status === 'approved') {\n    byStatus.approved += 1;\n    revenueApproved += Number(order.total || 0);\n  } else if (status === 'rejected') {\n    byStatus.rejected += 1;\n  } else {\n    byStatus.pending += 1;\n  }\n}\n\nconst bookSales = {};\nfor (const order of orders.filter((item) => String(item.status || 'pending') === 'approved')) {\n  const items = Array.isArray(order.items) ? order.items : [];\n  for (const item of items) {\n    const title = item?.title || 'Livre';\n    bookSales[title] = (bookSales[title] || 0) + Number(item?.qty || 1);\n  }\n}\n\nconst topBooks = Object.entries(bookSales)\n  .sort((a, b) => b[1] - a[1])\n  .slice(0, 5)\n  .map(([title, qty], index) => `${index + 1}. ${title} (${qty})`);\n\nconst totalToday = todayOrders.length;\nconst revenueText = revenueApproved.toLocaleString('fr-FR');\n\nconst lines = [\n  'Rapport quotidien Librairie YO',\n  `Date: ${new Date().toLocaleDateString('fr-FR')}`,\n  '',\n  `Commandes du jour: ${totalToday}`,\n  `En attente: ${byStatus.pending}`,\n  `Approuvees: ${byStatus.approved}`,\n  `Rejetees: ${byStatus.rejected}`,\n  `CA approuve (jour): ${revenueText} GNF`,\n  '',\n  'Top livres (global approuve):',\n  ...(topBooks.length ? topBooks : ['Aucune vente approuvee'])\n];\n\nreturn [{ json: { text: lines.join('\\n') } }];"
+      }
+    },
+    {
+      "id": "a62d1608-6c74-4f92-a11d-3a4f988eb204",
+      "name": "Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1040, 280],
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Daily Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Orders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Orders": {
+      "main": [
+        [
+          {
+            "node": "Compute Daily Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Daily Summary": {
+      "main": [
+        [
+          {
+            "node": "Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

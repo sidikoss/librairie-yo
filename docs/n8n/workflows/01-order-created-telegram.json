@@ -1,0 +1,114 @@
+{
+  "name": "Librairie YO - Order Created to Telegram",
+  "nodes": [
+    {
+      "id": "c8b2e8ea-9f6f-46f1-9bd0-1ecfdf04ea01",
+      "name": "Order Created Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [260, 280],
+      "parameters": {
+        "path": "librairie-yo/order-created",
+        "httpMethod": "POST",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "fbb4e3f5-31da-4f52-a3bf-09f81de13a02",
+      "name": "Normalize Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [520, 280],
+      "parameters": {
+        "jsCode": "const envelope = $json || {};\nconst data = envelope.data || {};\nconst customer = data.customer || {};\nconst payment = data.payment || {};\nconst items = Array.isArray(data.items) ? data.items : [];\n\nconst previewItems = items.slice(0, 5).map((item, index) => {\n  const title = item?.title || 'Livre';\n  const qty = Number(item?.qty || 1);\n  const price = Number(item?.price || 0).toLocaleString('fr-FR');\n  return `${index + 1}. ${title} x${qty} (${price} GNF)`;\n});\n\nreturn [{\n  json: {\n    orderId: data.orderId || 'N/A',\n    status: data.status || 'pending',\n    total: Number(data.total || 0),\n    discount: Number(data.discount || 0),\n    promoCode: data.promoCode || '',\n    customerName: customer.name || 'Client',\n    phone: customer.phone || 'N/A',\n    reference: payment.referencePaiement || payment.txId || 'N/A',\n    itemCount: items.length,\n    previewItems\n  }\n}];"
+      }
+    },
+    {
+      "id": "8cec0f5a-93f2-40f6-934d-1e5f0db1de03",
+      "name": "Build Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [780, 280],
+      "parameters": {
+        "jsCode": "const statusMap = {\n  pending: '[WAIT] En attente',\n  approved: '[OK] Approuvee',\n  rejected: '[NO] Rejetee'\n};\n\nconst statusLabel = statusMap[$json.status] || $json.status;\nconst total = Number($json.total || 0).toLocaleString('fr-FR');\nconst discount = Number($json.discount || 0).toLocaleString('fr-FR');\n\nconst lines = [\n  'Nouvelle commande Librairie YO',\n  `Commande: #${$json.orderId}`,\n  `Statut: ${statusLabel}`,\n  `Client: ${$json.customerName}`,\n  `Telephone: +${$json.phone}`,\n  `Reference paiement: ${$json.reference}`,\n  `Total: ${total} GNF`,\n  `Reduction: ${discount} GNF`,\n  $json.promoCode ? `Code promo: ${$json.promoCode}` : null,\n  `Articles: ${$json.itemCount}`,\n  ...($json.previewItems || [])\n].filter(Boolean);\n\nreturn [{ json: { text: lines.join('\\n') } }];"
+      }
+    },
+    {
+      "id": "96b32af4-5322-4a15-9c82-94fbcc3dcf04",
+      "name": "Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1040, 280],
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      }
+    },
+    {
+      "id": "8e3c214f-3fc2-4d30-8f03-d47bd73e2a05",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1300, 280],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, event: 'order.created' } }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Order Created Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Payload": {
+      "main": [
+        [
+          {
+            "node": "Build Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Message": {
+      "main": [
+        [
+          {
+            "node": "Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

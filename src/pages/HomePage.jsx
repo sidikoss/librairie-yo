@@ -5,6 +5,8 @@ import { BookGridSkeleton } from "../components/books/BookSkeleton";
 import CustomerTrustSection from "../components/home/CustomerTrustSection";
 import HeroSection from "../components/home/HeroSection";
 import SectionHeader from "../components/ui/SectionHeader";
+import BookSkeleton from "../components/ui/BookSkeleton";
+import SEO from "../components/seo/SEO";
 import { useCart } from "../context/CartContext";
 import { useCatalog } from "../context/CatalogContext";
 
@@ -25,15 +27,23 @@ export default function HomePage() {
   const heroBooks = useMemo(() => popularBooks.slice(0, 4), [popularBooks]);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
+      <SEO 
+        title="Accueil" 
+        description="Achetez vos livres rapidement en Guinée avec paiement Orange Money et livraison. Catalogue mobile et complet." 
+      />
       <HeroSection />
 
       {error ? (
-        <div className="card-surface p-4 text-sm text-rose-600">{error}</div>
+        <div className="card-surface border-brand-200 bg-brand-50/50 p-4 text-sm text-brand-600">
+          <span className="mr-2 font-bold">⚠️</span>
+          {error}
+        </div>
       ) : null}
 
       <CustomerTrustSection totalSoldBooks={totalSoldBooks} />
 
+      {/* Popular books */}
       <section>
         <SectionHeader
           eyebrow="Top ventes"
@@ -41,7 +51,9 @@ export default function HomePage() {
           description="Selection basee sur les commandes validees."
         />
         {loading ? (
+ website-analysis
           <BookGridSkeleton count={4} />
+
         ) : (
           <BookGrid
             books={heroBooks}
@@ -53,6 +65,7 @@ export default function HomePage() {
         )}
       </section>
 
+      {/* New books */}
       <section>
         <SectionHeader
           eyebrow="Nouveautés"
@@ -68,6 +81,7 @@ export default function HomePage() {
         />
       </section>
 
+website-analysis
       <section className="relative overflow-hidden rounded-2xl border border-white/70 bg-gradient-to-br from-brand-600 via-brand-500 to-guinea-600 p-8 text-center shadow-lg">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.15),transparent_50%)]" aria-hidden="true" />
         <div className="relative">
@@ -108,8 +122,32 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="text-center text-xs text-slate-500">
-        {books.length} livres disponibles
+
+        <div className="relative">
+          <h3 className="font-heading text-2xl font-extrabold text-white sm:text-3xl">
+            Prêt à commander ?
+          </h3>
+          <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-zinc-300 dark:text-zinc-400">
+            Explorez tout le catalogue et finalisez rapidement votre achat sur WhatsApp.
+          </p>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <button
+              onClick={() => navigate("/catalogue")}
+              className="group rounded-2xl bg-gradient-to-r from-brand-500 to-brand-600 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-brand-500/25 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-brand-500/30"
+            >
+              <span className="flex items-center gap-2">
+                Voir tout le catalogue
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </span>
+            </button>
+            <div className="flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold text-zinc-300 dark:text-zinc-400 backdrop-blur-sm">
+              <span className="h-2 w-2 rounded-full bg-guinea-400 animate-pulse-soft" />
+              {books.length} livres disponibles
+            </div>
+          </div>
+        </div>
       </section>
     </div>
   );

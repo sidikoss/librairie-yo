@@ -1,4 +1,5 @@
 export default function SalesCounter({ value = 0, compact = false }) {
+ website-analysis
   const formattedValue = Number(value || 0).toLocaleString("fr-FR");
   return (
     <div
@@ -11,6 +12,7 @@ export default function SalesCounter({ value = 0, compact = false }) {
       </svg>
       <span>{formattedValue}</span>
       <span className={compact ? "hidden" : ""}>ventes</span>
+
     </div>
   );
 }

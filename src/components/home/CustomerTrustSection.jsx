@@ -1,9 +1,33 @@
+import { useEffect, useState } from "react";
 import { CUSTOMER_REVIEWS, TRUST_BANNER } from "../../config/constants";
 import RatingStars from "../ui/RatingStars";
 import SalesCounter from "../ui/SalesCounter";
 
+function AnimatedCounter({ target }) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    if (!target || target <= 0) return;
+    const duration = 1500;
+    const steps = 30;
+    const increment = target / steps;
+    let current = 0;
+    const timer = setInterval(() => {
+      current += increment;
+      if (current >= target) {
+        setCount(target);
+        clearInterval(timer);
+      } else {
+        setCount(Math.floor(current));
+      }
+    }, duration / steps);
+    return () => clearInterval(timer);
+  }, [target]);
+  return <span>{count}</span>;
+}
+
 export default function CustomerTrustSection({ totalSoldBooks = 0 }) {
   return (
+ website-analysis
     <section className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
       {/* Trust card */}
       <div className="group relative overflow-hidden rounded-2xl border border-white/70 bg-white/95 p-6 shadow-soft transition-all duration-300 hover:shadow-warm">
@@ -48,10 +72,12 @@ export default function CustomerTrustSection({ totalSoldBooks = 0 }) {
           </div>
           <span className="text-xs text-slate-500">{CUSTOMER_REVIEWS.length} avis verifies</span>
         </div>
+
         <div className="space-y-3">
           {CUSTOMER_REVIEWS.map((review, index) => (
             <article
               key={review.id}
+ website-analysis
               className="group/review rounded-xl border border-slate-100 bg-gradient-to-r from-white via-slate-50 to-white p-3 transition-all duration-200 hover:border-accent-200 hover:shadow-sm"
               style={{ animationDelay: `${index * 100}ms` }}
             >
@@ -65,6 +91,7 @@ export default function CustomerTrustSection({ totalSoldBooks = 0 }) {
                 <RatingStars value={review.rating} />
               </div>
               <p className="mt-2 pl-10 text-sm leading-relaxed text-slate-600">{review.text}</p>
+
             </article>
           ))}
         </div>

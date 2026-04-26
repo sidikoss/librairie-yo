@@ -116,17 +116,28 @@ export function CatalogProvider({ children }) {
     [books],
   );
 
-  const toggleWishlist = (bookId) => {
+  const wishlistSet = useMemo(
+    () => new Set(wishlistIds),
+    [wishlistIds],
+  );
+
+  const toggleWishlist = useCallback((bookId) => {
     setWishlistIds((prev) =>
       prev.includes(bookId)
         ? prev.filter((id) => id !== bookId)
         : [...prev, bookId],
     );
-  };
+  }, [setWishlistIds]);
 
-  const isFavorite = (bookId) => wishlistIds.includes(bookId);
+  const isFavorite = useCallback(
+    (bookId) => wishlistSet.has(bookId),
+    [wishlistSet],
+  );
 
-  const getBookById = (bookId) => books.find((book) => book.id === bookId);
+  const getBookById = useCallback(
+    (bookId) => books.find((book) => book.id === bookId),
+    [books],
+  );
 
   const upsertBook = async ({ draft, filePayload = null, bookId = null }) => {
     const currentBook = books.find((book) => book.id === bookId);
@@ -167,12 +178,22 @@ export function CatalogProvider({ children }) {
 
   const findOrdersByPhoneAndPin = async (phone, pin) => {
     const normalized = normalizePhone(phone);
-    const refreshedOrders = await fetchOrders();
-    setOrders(refreshedOrders);
-
-    return refreshedOrders.filter(
-      (order) => normalizePhone(order.phone) === normalized && String(order.pin) === String(pin),
-    );
+    try {
+      const res = await fetch('/api/user-orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: normalized, pin })
+      });
+      const data = await res.json();
+      if (data.success && data.orders) {
+        setOrders(data.orders);
+        return data.orders;
+      }
+      return [];
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
   };
 
   const setOrderStatus = async (orderId, status) => {
@@ -207,7 +228,7 @@ export function CatalogProvider({ children }) {
     await refreshCatalog();
   };
 
-  const value = {
+  const value = useMemo(() => ({
     books,
     orders,
     promoCodes,
@@ -234,7 +255,12 @@ export function CatalogProvider({ children }) {
     addPromo,
     togglePromo,
     removePromo,
-  };
+  }), [
+    books, orders, promoCodes, loading, syncing, error, lastSyncAt,
+    wishlistIds, favoriteBooks, totalSoldBooks, popularBooks, newBooks,
+    refreshCatalog, toggleWishlist, isFavorite, getBookById,
+    submitOrder, findOrdersByPhoneAndPin
+  ]);
 
   return <CatalogContext.Provider value={value}>{children}</CatalogContext.Provider>;
 }

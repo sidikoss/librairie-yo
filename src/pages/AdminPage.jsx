@@ -1,9 +1,16 @@
+// src/pages/AdminPage.jsx
+// Auth déplacée côté serveur — le mot de passe n'est plus dans le bundle JS.
+
 import { useMemo, useState } from "react";
-import { ADMIN_PASSWORD, STORAGE_KEYS } from "../config/constants";
+import { STORAGE_KEYS } from "../config/constants";
 import { useCatalog } from "../context/CatalogContext";
+import { usePdfLibrary } from "../hooks/usePdfLibrary";
+import { generateMetadata } from "../services/claudeClient";
 import { formatGNF } from "../utils/format";
 
-const SESSION_TTL = 2 * 60 * 60 * 1000;
+const SESSION_TTL = 2 * 60 * 60 * 1000; // 2 h (doit correspondre à l'API)
+
+const SESSION_KEY = STORAGE_KEYS.adminSession;
 
 const emptyBookDraft = {
   title: "",
@@ -20,19 +27,44 @@ const emptyBookDraft = {
   manualPriceEnabled: false,
 };
 
+// ── Session helpers ──────────────────────────────────────────────────────────
+
 function loadAdminSession() {
-  const raw = localStorage.getItem(STORAGE_KEYS.adminSession);
-  const timestamp = Number(raw || 0);
-  return Boolean(timestamp && Date.now() - timestamp < SESSION_TTL);
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const { token, ts } = JSON.parse(raw);
+    if (!token || !ts || Date.now() - ts >= SESSION_TTL) return null;
+    return token;
+  } catch {
+    return null;
+  }
 }
 
-function saveAdminSession() {
-  localStorage.setItem(STORAGE_KEYS.adminSession, String(Date.now()));
+function saveAdminSession(token) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify({ token, ts: Date.now() }));
 }
 
 function clearAdminSession() {
-  localStorage.removeItem(STORAGE_KEYS.adminSession);
+  localStorage.removeItem(SESSION_KEY);
 }
+
+// ── Server auth ──────────────────────────────────────────────────────────────
+
+async function loginWithPassword(password) {
+  const res = await fetch("/api/admin-auth", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || "Mot de passe incorrect");
+  }
+  return data.token;
+}
+
+// ── File helper ──────────────────────────────────────────────────────────────
 
 function readFileAsBase64(file) {
   return new Promise((resolve, reject) => {
@@ -42,6 +74,8 @@ function readFileAsBase64(file) {
     reader.readAsDataURL(file);
   });
 }
+
+// ── Component ────────────────────────────────────────────────────────────────
 
 export default function AdminPage() {
   const {
@@ -59,62 +93,87 @@ export default function AdminPage() {
     syncing,
   } = useCatalog();
 
-  const [isLoggedIn, setIsLoggedIn] = useState(loadAdminSession);
-  const [password, setPassword] = useState("");
+  // Auth state
+  const [adminToken, setAdminToken] = useState(() => loadAdminSession());
+  const isLoggedIn = Boolean(adminToken);
+  const [password, setPassword]     = useState("");
   const [loginError, setLoginError] = useState("");
-  const [activeTab, setActiveTab] = useState("stats");
-  const [bookDraft, setBookDraft] = useState(emptyBookDraft);
+  const [loginBusy, setLoginBusy]   = useState(false);
+
+  // UI state
+  const [activeTab, setActiveTab]       = useState("stats");
+  const [bookDraft, setBookDraft]       = useState(emptyBookDraft);
   const [editingBookId, setEditingBookId] = useState("");
   const [uploadPayload, setUploadPayload] = useState(null);
-  const [bookQuery, setBookQuery] = useState("");
-  const [orderQuery, setOrderQuery] = useState("");
-  const [promoDraft, setPromoDraft] = useState({
-    code: "",
-    discount: "",
-    type: "percent",
-    maxUses: "100",
+  const [bookQuery, setBookQuery]       = useState("");
+  const [orderQuery, setOrderQuery]     = useState("");
+  const [promoDraft, setPromoDraft]     = useState({
+    code: "", discount: "", type: "percent", maxUses: "100",
   });
   const [savingBook, setSavingBook] = useState(false);
+  const [extracting, setExtracting] = useState(false);
+  const { pdfLib } = usePdfLibrary();
+
+  // ── Derived data ─────────────────────────────────────────────────────────
 
   const approvedOrders = useMemo(
-    () => orders.filter((order) => order.status === "approved"),
-    [orders],
+    () => orders.filter((o) => o.status === "approved"), [orders],
   );
   const pendingOrders = useMemo(
-    () => orders.filter((order) => order.status === "pending"),
-    [orders],
+    () => orders.filter((o) => o.status === "pending"), [orders],
   );
   const rejectedOrders = useMemo(
-    () => orders.filter((order) => order.status === "rejected"),
-    [orders],
+    () => orders.filter((o) => o.status === "rejected"), [orders],
   );
   const totalRevenue = useMemo(
-    () => approvedOrders.reduce((sum, order) => sum + Number(order.total || 0), 0),
+    () => approvedOrders.reduce((s, o) => s + Number(o.total || 0), 0),
     [approvedOrders],
   );
 
   const filteredBooks = useMemo(() => {
-    const query = bookQuery.toLowerCase();
-    if (!query) return books;
+    const q = bookQuery.toLowerCase();
+    if (!q) return books;
     return books.filter(
-      (book) =>
-        book.title.toLowerCase().includes(query) ||
-        book.author.toLowerCase().includes(query),
+      (b) => b.title.toLowerCase().includes(q) || b.author.toLowerCase().includes(q),
     );
   }, [books, bookQuery]);
 
   const filteredOrders = useMemo(() => {
-    const query = orderQuery.toLowerCase();
-    if (!query) return orders;
+    const q = orderQuery.toLowerCase();
+    if (!q) return orders;
     return orders.filter(
-      (order) =>
-        String(order.name || "").toLowerCase().includes(query) ||
-        String(order.phone || "").includes(query) ||
-        String(order.referencePaiement || order.txId || "")
-          .toLowerCase()
-          .includes(query),
+      (o) =>
+        String(o.name || "").toLowerCase().includes(q) ||
+        String(o.phone || "").includes(q) ||
+        String(o.referencePaiement || o.txId || "").toLowerCase().includes(q),
     );
   }, [orders, orderQuery]);
+
+  // ── Auth handlers ─────────────────────────────────────────────────────────
+
+  const handleLogin = async () => {
+    setLoginError("");
+    setLoginBusy(true);
+    try {
+      const token = await loginWithPassword(password);
+      saveAdminSession(token);
+      setAdminToken(token);
+      setPassword("");
+    } catch (err) {
+      setLoginError(err.message || "Erreur de connexion");
+    } finally {
+      setLoginBusy(false);
+    }
+  };
+
+  const handleLogout = () => {
+    clearAdminSession();
+    setAdminToken(null);
+    setPassword("");
+    setLoginError("");
+  };
+
+  // ── Book handlers ─────────────────────────────────────────────────────────
 
   const resetBookForm = () => {
     setBookDraft(emptyBookDraft);
@@ -122,37 +181,53 @@ export default function AdminPage() {
     setUploadPayload(null);
   };
 
-  const handleLogin = () => {
-    if (password === ADMIN_PASSWORD) {
-      setIsLoggedIn(true);
-      setLoginError("");
-      saveAdminSession();
-      return;
-    }
-    setLoginError("Mot de passe incorrect.");
-  };
-
-  const handleLogout = () => {
-    clearAdminSession();
-    setIsLoggedIn(false);
-    setPassword("");
-    setLoginError("");
-  };
-
   const handleBookFileChange = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    const fileData = await readFileAsBase64(file);
-    setUploadPayload({
-      fileData,
-      fileName: file.name,
-      fileType: file.type || "application/octet-stream",
-    });
+    setExtracting(true);
+    try {
+      const fileData = await readFileAsBase64(file);
+      setUploadPayload({ fileData, fileName: file.name, fileType: file.type || "application/octet-stream" });
+
+      if (file.type === "application/pdf" && pdfLib) {
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const pdfDoc = await pdfLib.getDocument({ data: arrayBuffer }).promise;
+          const page = await pdfDoc.getPage(1);
+          const viewport = page.getViewport({ scale: 1.0 });
+          const canvas = document.createElement("canvas");
+          const context = canvas.getContext("2d");
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          
+          await page.render({ canvasContext: context, viewport }).promise;
+          const coverImage = canvas.toDataURL("image/jpeg", 0.8);
+          
+          setBookDraft((p) => ({ ...p, image: coverImage }));
+
+          const textContent = await page.getTextContent();
+          const text = textContent.items.map(i => i.str).join(" ").substring(0, 1500);
+          
+          if (text.trim()) {
+            const meta = await generateMetadata(text);
+            setBookDraft((p) => ({
+              ...p,
+              title: meta.title || p.title,
+              author: meta.author || p.author,
+              description: meta.summary || p.description,
+            }));
+          }
+        } catch (extractError) {
+          console.error("Silent error during PDF/Claude extraction:", extractError);
+        }
+      }
+    } finally {
+      setExtracting(false);
+    }
   };
 
   const handleBookSubmit = async () => {
     if (!bookDraft.title.trim() || !bookDraft.author.trim()) return;
-
     setSavingBook(true);
     try {
       await upsertBook({
@@ -196,13 +271,10 @@ export default function AdminPage() {
   const handleCreatePromo = async () => {
     if (!promoDraft.code || !promoDraft.discount) return;
     await addPromo(promoDraft);
-    setPromoDraft({
-      code: "",
-      discount: "",
-      type: "percent",
-      maxUses: "100",
-    });
+    setPromoDraft({ code: "", discount: "", type: "percent", maxUses: "100" });
   };
+
+  // ── Login screen ──────────────────────────────────────────────────────────
 
   if (!isLoggedIn) {
     return (
@@ -210,37 +282,36 @@ export default function AdminPage() {
         <p className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-brand-600">
           Administration
         </p>
-        <h1 className="font-heading text-2xl font-extrabold text-slate-900">
+        <h1 className="font-heading text-2xl font-extrabold text-zinc-900">
           Connexion admin
         </h1>
-        <p className="mt-2 text-sm text-slate-600">
+        <p className="mt-2 text-sm text-zinc-600">
           Entrez le mot de passe pour gérer le catalogue et les commandes.
         </p>
         <input
           type="password"
           value={password}
-          onChange={(event) => {
-            setPassword(event.target.value);
-            setLoginError("");
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              handleLogin();
-            }
-          }}
+          onChange={(e) => { setPassword(e.target.value); setLoginError(""); }}
+          onKeyDown={(e) => e.key === "Enter" && !loginBusy && handleLogin()}
           placeholder="Mot de passe"
-          className="mt-4 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-300 focus:ring"
+          className="mt-4 w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm outline-none ring-brand-300 focus:ring"
+          autoComplete="current-password"
         />
-        {loginError ? <p className="mt-2 text-sm text-rose-600">{loginError}</p> : null}
+        {loginError && (
+          <p className="mt-2 text-sm text-rose-600">{loginError}</p>
+        )}
         <button
           onClick={handleLogin}
-          className="mt-4 w-full rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white"
+          disabled={loginBusy}
+          className="mt-4 w-full rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
         >
-          Se connecter
+          {loginBusy ? "Vérification..." : "Se connecter"}
         </button>
       </div>
     );
   }
+
+  // ── Admin dashboard ───────────────────────────────────────────────────────
 
   return (
     <div className="space-y-6">
@@ -249,14 +320,14 @@ export default function AdminPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-brand-600">
             Administration
           </p>
-          <h1 className="font-heading text-2xl font-extrabold text-slate-900">
+          <h1 className="font-heading text-2xl font-extrabold text-zinc-900">
             Back-office Librairie YO
           </h1>
         </div>
         <div className="flex gap-2">
           <button
             onClick={refreshCatalog}
-            className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
+            className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-300"
           >
             {syncing ? "Sync..." : "Synchroniser"}
           </button>
@@ -270,378 +341,263 @@ export default function AdminPage() {
       </header>
 
       <nav className="flex flex-wrap gap-2">
-        {[
-          ["stats", "Stats"],
-          ["books", "Catalogue"],
-          ["orders", "Commandes"],
-          ["promos", "Promos"],
-        ].map(([id, label]) => (
-          <button
-            key={id}
-            onClick={() => setActiveTab(id)}
-            className={`rounded-full px-4 py-2 text-sm font-semibold ${
-              activeTab === id
-                ? "bg-brand-600 text-white"
-                : "bg-slate-100 text-slate-600"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+        {[["stats","Stats"],["books","Catalogue"],["orders","Commandes"],["promos","Promos"]].map(
+          ([id, label]) => (
+            <button
+              key={id}
+              onClick={() => setActiveTab(id)}
+              className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                activeTab === id ? "bg-brand-600 text-white" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600"
+              }`}
+            >
+              {label}
+            </button>
+          )
+        )}
       </nav>
 
-      {activeTab === "stats" ? (
+      {/* ── STATS ── */}
+      {activeTab === "stats" && (
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <article className="card-surface p-4">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Livres</p>
-            <p className="mt-1 text-2xl font-extrabold text-slate-900">{books.length}</p>
-          </article>
-          <article className="card-surface p-4">
-            <p className="text-xs uppercase tracking-wide text-slate-500">En attente</p>
-            <p className="mt-1 text-2xl font-extrabold text-amber-600">{pendingOrders.length}</p>
-          </article>
-          <article className="card-surface p-4">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Approuvées</p>
-            <p className="mt-1 text-2xl font-extrabold text-emerald-600">{approvedOrders.length}</p>
-          </article>
-          <article className="card-surface p-4">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Revenus</p>
-            <p className="mt-1 text-2xl font-extrabold text-slate-900">{formatGNF(totalRevenue)}</p>
-          </article>
+          {[
+            { label: "Livres",       value: books.length,           color: "text-zinc-900" },
+            { label: "En attente",   value: pendingOrders.length,   color: "text-amber-600" },
+            { label: "Approuvées",   value: approvedOrders.length,  color: "text-emerald-600" },
+            { label: "Revenus",      value: formatGNF(totalRevenue), color: "text-zinc-900" },
+          ].map(({ label, value, color }) => (
+            <article key={label} className="card-surface p-4">
+              <p className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{label}</p>
+              <p className={`mt-1 text-2xl font-extrabold ${color}`}>{value}</p>
+            </article>
+          ))}
         </section>
-      ) : null}
+      )}
 
-      {activeTab === "books" ? (
+      {/* ── BOOKS ── */}
+      {activeTab === "books" && (
         <section className="space-y-4">
           <article className="card-surface p-4">
-            <h2 className="font-heading text-lg font-bold text-slate-900">
+            <h2 className="font-heading text-lg font-bold text-zinc-900">
               {editingBookId ? "Modifier un livre" : "Ajouter un livre"}
             </h2>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
-              <input
-                value={bookDraft.title}
-                onChange={(event) =>
-                  setBookDraft((prev) => ({ ...prev, title: event.target.value }))
-                }
-                placeholder="Titre"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              {[
+                { value: bookDraft.title,  key: "title",  placeholder: "Titre" },
+                { value: bookDraft.author, key: "author", placeholder: "Auteur" },
+              ].map(({ value, key, placeholder }) => (
+                <input
+                  key={key}
+                  value={value}
+                  onChange={(e) => setBookDraft((p) => ({ ...p, [key]: e.target.value }))}
+                  placeholder={placeholder}
+                  className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
+                />
+              ))}
+              <input type="number" value={bookDraft.pages}
+                onChange={(e) => setBookDraft((p) => ({ ...p, pages: e.target.value }))}
+                placeholder="Pages" className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
               />
-              <input
-                value={bookDraft.author}
-                onChange={(event) =>
-                  setBookDraft((prev) => ({ ...prev, author: event.target.value }))
-                }
-                placeholder="Auteur"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
-              />
-              <input
-                type="number"
-                value={bookDraft.pages}
-                onChange={(event) =>
-                  setBookDraft((prev) => ({ ...prev, pages: event.target.value }))
-                }
-                placeholder="Pages"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
-              />
-              <select
-                value={bookDraft.category}
-                onChange={(event) =>
-                  setBookDraft((prev) => ({ ...prev, category: event.target.value }))
-                }
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              <select value={bookDraft.category}
+                onChange={(e) => setBookDraft((p) => ({ ...p, category: e.target.value }))}
+                className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
               >
-                {categories.map((category) => (
-                  <option key={category} value={category}>
-                    {category}
-                  </option>
-                ))}
+                {categories.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
-              <input
-                value={bookDraft.image}
-                onChange={(event) =>
-                  setBookDraft((prev) => ({ ...prev, image: event.target.value }))
-                }
+              <input value={bookDraft.image}
+                onChange={(e) => setBookDraft((p) => ({ ...p, image: e.target.value }))}
                 placeholder="Image URL (optionnel)"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm md:col-span-2"
+                className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm md:col-span-2"
               />
-              <textarea
-                value={bookDraft.description}
-                onChange={(event) =>
-                  setBookDraft((prev) => ({ ...prev, description: event.target.value }))
-                }
+              <textarea value={bookDraft.description}
+                onChange={(e) => setBookDraft((p) => ({ ...p, description: e.target.value }))}
                 placeholder="Description"
-                className="min-h-24 rounded-xl border border-slate-300 px-3 py-2 text-sm md:col-span-2"
+                className="min-h-24 rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm md:col-span-2"
               />
-              <input
-                type="number"
-                step="0.1"
-                min="1"
-                max="5"
-                value={bookDraft.rating}
-                onChange={(event) =>
-                  setBookDraft((prev) => ({ ...prev, rating: event.target.value }))
-                }
-                placeholder="Note"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              <input type="number" step="0.1" min="1" max="5" value={bookDraft.rating}
+                onChange={(e) => setBookDraft((p) => ({ ...p, rating: e.target.value }))}
+                placeholder="Note" className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
               />
-              <input
-                type="number"
-                min="0"
-                value={bookDraft.discount}
-                onChange={(event) =>
-                  setBookDraft((prev) => ({ ...prev, discount: event.target.value }))
-                }
-                placeholder="Remise (GNF)"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              <input type="number" min="0" value={bookDraft.discount}
+                onChange={(e) => setBookDraft((p) => ({ ...p, discount: e.target.value }))}
+                placeholder="Remise (GNF)" className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
               />
-              <input
-                type="number"
-                min="0"
-                value={bookDraft.stock}
-                onChange={(event) =>
-                  setBookDraft((prev) => ({ ...prev, stock: event.target.value }))
-                }
-                placeholder="Stock"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              <input type="number" min="0" value={bookDraft.stock}
+                onChange={(e) => setBookDraft((p) => ({ ...p, stock: e.target.value }))}
+                placeholder="Stock" className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
               />
-              <input
-                type="number"
-                min="0"
-                value={bookDraft.manualPrice}
-                onChange={(event) =>
-                  setBookDraft((prev) => ({ ...prev, manualPrice: event.target.value }))
-                }
+              <input type="number" min="0" value={bookDraft.manualPrice}
+                onChange={(e) => setBookDraft((p) => ({ ...p, manualPrice: e.target.value }))}
                 placeholder="Override prix manuel (optionnel)"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
               />
-              <label className="inline-flex items-center gap-2 text-sm text-slate-600">
-                <input
-                  type="checkbox"
-                  checked={bookDraft.manualPriceEnabled}
-                  onChange={(event) =>
-                    setBookDraft((prev) => ({
-                      ...prev,
-                      manualPriceEnabled: event.target.checked,
-                    }))
-                  }
-                />
-                Activer override manuel
+              <label className="inline-flex items-center gap-2 text-sm text-zinc-600">
+                <input type="checkbox" checked={bookDraft.manualPriceEnabled}
+                  onChange={(e) => setBookDraft((p) => ({ ...p, manualPriceEnabled: e.target.checked }))}
+                /> Activer override manuel
               </label>
-              <label className="inline-flex items-center gap-2 text-sm text-slate-600">
-                <input
-                  type="checkbox"
-                  checked={bookDraft.featured}
-                  onChange={(event) =>
-                    setBookDraft((prev) => ({ ...prev, featured: event.target.checked }))
-                  }
-                />
-                Mettre en avant
+              <label className="inline-flex items-center gap-2 text-sm text-zinc-600">
+                <input type="checkbox" checked={bookDraft.featured}
+                  onChange={(e) => setBookDraft((p) => ({ ...p, featured: e.target.checked }))}
+                /> Mettre en avant
               </label>
-              <input
-                type="file"
-                accept=".pdf,.epub,.txt"
-                onChange={handleBookFileChange}
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm md:col-span-2"
-              />
+              <div className="md:col-span-2">
+                <input type="file" accept=".pdf,.epub,.txt"
+                  onChange={handleBookFileChange}
+                  disabled={extracting}
+                  className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm w-full"
+                />
+                {extracting && <p className="mt-1 text-xs text-brand-600 animate-pulse">Extraction de la couverture et analyse IA en cours...</p>}
+              </div>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                onClick={handleBookSubmit}
-                disabled={savingBook}
+              <button onClick={handleBookSubmit} disabled={savingBook}
                 className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
               >
                 {savingBook ? "Sauvegarde..." : editingBookId ? "Mettre à jour" : "Ajouter"}
               </button>
-              <button
-                onClick={resetBookForm}
-                className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700"
-              >
-                Réinitialiser
-              </button>
+              <button onClick={resetBookForm}
+                className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-2.5 text-sm font-medium text-zinc-700 dark:text-zinc-300"
+              >Réinitialiser</button>
             </div>
           </article>
 
           <article className="card-surface p-4">
-            <input
-              value={bookQuery}
-              onChange={(event) => setBookQuery(event.target.value)}
+            <input value={bookQuery} onChange={(e) => setBookQuery(e.target.value)}
               placeholder="Rechercher un livre..."
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
             />
             <div className="mt-3 space-y-2">
               {filteredBooks.map((book) => (
-                <div
-                  key={book.id}
+                <div key={book.id}
                   className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 p-3"
                 >
                   <div>
                     <p className="font-semibold text-slate-800">{book.title}</p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
                       {book.author} · {book.category} · {book.pages} pages
                     </p>
                   </div>
                   <div className="flex gap-2">
-                    <button
-                      onClick={() => handleBookEdit(book)}
-                      className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700"
-                    >
-                      Modifier
-                    </button>
-                    <button
-                      onClick={() => removeBook(book.id)}
+                    <button onClick={() => handleBookEdit(book)}
+                      className="rounded-lg border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300"
+                    >Modifier</button>
+                    <button onClick={() => { if (window.confirm("Êtes-vous sûr de vouloir supprimer ce livre ? Cette action est irréversible.")) removeBook(book.id); }}
                       className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-medium text-rose-700"
-                    >
-                      Supprimer
-                    </button>
+                    >Supprimer</button>
                   </div>
                 </div>
               ))}
             </div>
           </article>
         </section>
-      ) : null}
+      )}
 
-      {activeTab === "orders" ? (
+      {/* ── ORDERS ── */}
+      {activeTab === "orders" && (
         <section className="card-surface p-4">
-          <input
-            value={orderQuery}
-            onChange={(event) => setOrderQuery(event.target.value)}
+          <input value={orderQuery} onChange={(e) => setOrderQuery(e.target.value)}
             placeholder="Rechercher commande (nom, téléphone, transaction)"
-            className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+            className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
           />
           <div className="mt-3 space-y-2">
             {filteredOrders.map((order) => (
               <article key={order.fbKey} className="rounded-xl border border-slate-200 p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm font-semibold text-slate-800">{order.name}</p>
-                  <span className="text-xs text-slate-500">
-                    {order.createdAt
-                      ? new Date(order.createdAt).toLocaleString("fr-FR")
-                      : "Date inconnue"}
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                    {order.createdAt ? new Date(order.createdAt).toLocaleString("fr-FR") : "Date inconnue"}
                   </span>
                 </div>
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                   {order.phone} · Ref: {order.referencePaiement || order.txId || "N/A"} · Total: {formatGNF(order.total)}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
+                  <span className="rounded-full bg-zinc-100 dark:bg-zinc-800 px-2 py-1 text-xs font-medium text-zinc-600">
                     Statut: {order.status}
                   </span>
-                  {order.status === "pending" ? (
+                  {order.status === "pending" && (
                     <>
-                      <button
-                        onClick={() => setOrderStatus(order.fbKey, "approved")}
+                      <button onClick={() => setOrderStatus(order.fbKey, "approved")}
                         className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white"
-                      >
-                        Approuver
-                      </button>
-                      <button
-                        onClick={() => setOrderStatus(order.fbKey, "rejected")}
+                      >Approuver</button>
+                      <button onClick={() => setOrderStatus(order.fbKey, "rejected")}
                         className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white"
-                      >
-                        Rejeter
-                      </button>
+                      >Rejeter</button>
                     </>
-                  ) : null}
+                  )}
                 </div>
               </article>
             ))}
           </div>
-          <div className="mt-4 text-xs text-slate-500">
+          <div className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">
             Rejetées: {rejectedOrders.length}
           </div>
         </section>
-      ) : null}
+      )}
 
-      {activeTab === "promos" ? (
+      {/* ── PROMOS ── */}
+      {activeTab === "promos" && (
         <section className="space-y-3">
           <article className="card-surface p-4">
-            <h2 className="font-heading text-lg font-bold text-slate-900">
+            <h2 className="font-heading text-lg font-bold text-zinc-900">
               Créer un code promo
             </h2>
             <div className="mt-3 grid gap-3 md:grid-cols-4">
-              <input
-                value={promoDraft.code}
-                onChange={(event) =>
-                  setPromoDraft((prev) => ({ ...prev, code: event.target.value.toUpperCase() }))
-                }
+              <input value={promoDraft.code}
+                onChange={(e) => setPromoDraft((p) => ({ ...p, code: e.target.value.toUpperCase() }))}
                 placeholder="Code"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
               />
-              <input
-                type="number"
-                value={promoDraft.discount}
-                onChange={(event) =>
-                  setPromoDraft((prev) => ({ ...prev, discount: event.target.value }))
-                }
+              <input type="number" value={promoDraft.discount}
+                onChange={(e) => setPromoDraft((p) => ({ ...p, discount: e.target.value }))}
                 placeholder="Réduction"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
               />
-              <select
-                value={promoDraft.type}
-                onChange={(event) =>
-                  setPromoDraft((prev) => ({ ...prev, type: event.target.value }))
-                }
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              <select value={promoDraft.type}
+                onChange={(e) => setPromoDraft((p) => ({ ...p, type: e.target.value }))}
+                className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
               >
                 <option value="percent">% Pourcentage</option>
                 <option value="fixed">Montant fixe</option>
               </select>
-              <input
-                type="number"
-                value={promoDraft.maxUses}
-                onChange={(event) =>
-                  setPromoDraft((prev) => ({ ...prev, maxUses: event.target.value }))
-                }
+              <input type="number" value={promoDraft.maxUses}
+                onChange={(e) => setPromoDraft((p) => ({ ...p, maxUses: e.target.value }))}
                 placeholder="Utilisations max"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
               />
             </div>
-            <button
-              onClick={handleCreatePromo}
+            <button onClick={handleCreatePromo}
               className="mt-3 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white"
-            >
-              Ajouter le code promo
-            </button>
+            >Ajouter le code promo</button>
           </article>
 
           <article className="card-surface p-4">
             <div className="space-y-2">
               {promoCodes.map((promo) => (
-                <div
-                  key={promo.fbKey}
+                <div key={promo.fbKey}
                   className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 p-3"
                 >
                   <div>
                     <p className="font-semibold text-slate-800">{promo.code}</p>
-                    <p className="text-xs text-slate-500">
-                      {promo.type === "percent"
-                        ? `${promo.discount}%`
-                        : formatGNF(promo.discount)}{" "}
-                      · {promo.uses || 0}/{promo.maxUses || "∞"}
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      {promo.type === "percent" ? `${promo.discount}%` : formatGNF(promo.discount)}
+                      {" · "}{promo.uses || 0}/{promo.maxUses || "∞"}
                     </p>
                   </div>
                   <div className="flex gap-2">
-                    <button
-                      onClick={() => togglePromo(promo)}
-                      className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700"
-                    >
-                      {promo.active ? "Désactiver" : "Activer"}
-                    </button>
-                    <button
-                      onClick={() => removePromo(promo.fbKey)}
+                    <button onClick={() => togglePromo(promo)}
+                      className="rounded-lg border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300"
+                    >{promo.active ? "Désactiver" : "Activer"}</button>
+                    <button onClick={() => removePromo(promo.fbKey)}
                       className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-medium text-rose-700"
-                    >
-                      Supprimer
-                    </button>
+                    >Supprimer</button>
                   </div>
                 </div>
               ))}
             </div>
           </article>
         </section>
-      ) : null}
+      )}
     </div>
   );
 }
-
