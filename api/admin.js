@@ -24,7 +24,7 @@ export default async function handler(req, res) {
 
 async function handleLogin(req, res) {
   if (req.method === 'GET') {
-    return res.status(200).json({ ok: true, service: 'admin' });
+    return res.status(200).json({ ok: true, service: 'admin', envSet: !!process.env.ADMIN_PASSWORD });
   }
   
   if (req.method !== 'POST') {
@@ -33,15 +33,15 @@ async function handleLogin(req, res) {
   
   try {
     const { password } = req.body || {};
+    const adminPassword = process.env.ADMIN_PASSWORD;
+    
+    console.log('[Admin] Password received:', password ? password.length + ' chars' : 'empty');
+    console.log('[Admin] Env password set:', !!adminPassword, adminPassword ? adminPassword.length + ' chars' : '');
     
     if (!password) {
       return res.status(400).json({ error: 'Mot de passe requis' });
     }
-
-    // Get admin password from env
-    const adminPassword = process.env.ADMIN_PASSWORD;
     
-    // If no password configured, deny access
     if (!adminPassword) {
       return res.status(401).json({ error: 'Admin non configuré' });
     }
