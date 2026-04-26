@@ -19,8 +19,17 @@ async function handleUserOrders(req, res) {
   }
 
   try {
-    const phone = req.body?.phone;
-    const pin = req.body?.pin;
+    let body = req.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch (e) {
+        return res.status(400).json({ error: 'JSON invalide' });
+      }
+    }
+    
+    const phone = body?.phone;
+    const pin = body?.pin;
 
     if (!phone || !pin) {
       return res.status(400).json({ error: 'Téléphone et PIN requis.' });
@@ -49,7 +58,7 @@ async function handleUserOrders(req, res) {
     return res.status(200).json({ success: true, orders: matchingOrders });
   } catch (error) {
     console.error('[Orders] Error:', error);
-    return res.status(500).json({ error: 'Erreur serveur' });
+    return res.status(500).json({ error: 'Erreur serveur: ' + error.message });
   }
 }
 
