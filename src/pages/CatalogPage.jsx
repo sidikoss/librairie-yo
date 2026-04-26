@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { Link } from "react-router-dom";
 import BookGrid from "../components/books/BookGrid";
 import SectionHeader from "../components/ui/SectionHeader";
 import BookSkeleton from "../components/ui/BookSkeleton";
@@ -55,6 +56,19 @@ export default function CatalogPage() {
         title="Trouvez le bon livre rapidement"
         description="Recherche dynamique, filtre prix et tri par popularité pour maximiser vos ventes."
       />
+
+      {/* Categories links */}
+      <section className="flex flex-wrap gap-2">
+        {categoryOptions.map((cat) => (
+          <Link
+            key={cat}
+            to={`/categorie/${encodeURIComponent(cat)}`}
+            className="rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-all hover:border-brand-500 hover:text-brand-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:border-brand-400 dark:hover:text-brand-400"
+          >
+            {cat}
+          </Link>
+        ))}
+      </section>
 
       {/* Filter section */}
       <section className="card-surface p-5">

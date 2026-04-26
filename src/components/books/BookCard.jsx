@@ -1,4 +1,5 @@
 import { memo, useState } from "react";
+import { Link } from "react-router-dom";
 import LazyImage from "../common/LazyImage";
 import Badge from "../ui/Badge";
 import PriceTag from "../ui/PriceTag";
@@ -97,14 +98,19 @@ const BookCard = memo(function BookCard({
 
       {/* Card body */}
       <div className="flex flex-1 flex-col p-4">
-        <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-brand-500">
+        <Link
+          to={`/livre/${book.id}`}
+          className="mb-1 text-[10px] font-bold uppercase tracking-widest text-brand-500 hover:text-brand-600"
+        >
           {book.category}
-        </p>
+        </Link>
         <h3
           id={`book-title-${book.id}`}
           className="font-heading text-base font-bold leading-snug text-zinc-900 transition-colors duration-300 group-hover:text-brand-700 dark:group-hover:text-brand-400 sm:text-lg"
         >
-          {book.title}
+          <Link to={`/livre/${book.id}`} className="hover:text-brand-600">
+            {book.title}
+          </Link>
         </h3>
         <p className="mb-3 text-xs text-zinc-500 sm:text-sm">{book.author}</p>
 

@@ -10,6 +10,8 @@ import RootLayout from "./components/layout/RootLayout";
 
 const HomePage = lazy(() => import("./pages/HomePage"));
 const CatalogPage = lazy(() => import("./pages/CatalogPage"));
+const ProductPage = lazy(() => import("./pages/ProductPage"));
+const CategoryPage = lazy(() => import("./pages/CategoryPage"));
 const CartPage = lazy(() => import("./pages/CartPage"));
 const CheckoutPage = lazy(() => import("./pages/CheckoutPage"));
 const FavoritesPage = lazy(() => import("./pages/FavoritesPage"));
@@ -21,6 +23,8 @@ const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
 const routes = [
   { path: "/", component: HomePage, name: "home" },
   { path: "/catalogue", component: CatalogPage, name: "catalogue" },
+  { path: "/livre/:id", component: ProductPage, name: "product" },
+  { path: "/categorie/:category", component: CategoryPage, name: "category" },
   { path: "/panier", component: CartPage, name: "cart" },
   { path: "/checkout", component: CheckoutPage, name: "checkout" },
   { path: "/favoris", component: FavoritesPage, name: "favorites" },

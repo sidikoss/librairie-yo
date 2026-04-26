@@ -7,9 +7,66 @@ import { applySecurityHeaders } from "./_lib/securityHeaders";
 import { validateOrangeMoneyPayment } from "./_lib/schemaValidator";
 import { sanitizeRequestBody, xssDetection } from "./_lib/sanitization";
 import { logSecurityEvent, securityMiddleware, detectBruteForce } from "./_lib/securityMonitor";
-import { getAdminDatabase, isFirebaseAdminConfigured } from "./_lib/firebaseAdmin";
+import { getAdminDatabase, getAdminFirestore, isFirebaseAdminConfigured } from "./_lib/firebaseAdmin";
 
 const PAYMENT_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const OM_SIMULATION_MODE = process.env.OM_SIMULATION_MODE !== 'false';
+const OM_REQUIRE_ADMIN_APPROVAL = process.env.OM_REQUIRE_ADMIN_APPROVAL === 'true';
+
+async function getBookPricesFromFirestore(bookIds) {
+  if (!isFirebaseAdminConfigured() || !bookIds?.length) return {};
+  
+  try {
+    const firestore = getAdminFirestore();
+    const prices = {};
+    
+    for (const bookId of bookIds) {
+      const doc = await firestore.collection('books').doc(bookId).get();
+      if (doc.exists) {
+        const data = doc.data();
+        prices[bookId] = {
+          price: Number(data.price || 0),
+          discount: Number(data.discount || 0),
+          title: data.title,
+        };
+      }
+    }
+    
+    return prices;
+  } catch (error) {
+    console.error('[Payment] Error fetching book prices:', error.message);
+    return {};
+  }
+}
+
+async function calculateVerifiedTotal(items, bookPrices) {
+  let total = 0;
+  const verifiedItems = [];
+  
+  for (const item of items) {
+    const bookPrice = bookPrices[item.bookId];
+    
+    if (!bookPrice) {
+      throw new Error(`Livre non trouvé: ${item.bookId}`);
+    }
+    
+    const itemPrice = bookPrice.price;
+    const qty = Number(item.qty || 1);
+    const lineTotal = itemPrice * qty;
+    
+    total += lineTotal;
+    
+    verifiedItems.push({
+      ...item,
+      unitPrice: itemPrice,
+      qty: qty,
+      totalPrice: lineTotal,
+      verified: true,
+    });
+  }
+  
+  return { total, verifiedItems };
+}
 
 function generateOrderId() {
   return `OM_${Date.now()}_${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
@@ -167,74 +224,96 @@ async function processPayment(req, res) {
       });
     }
 
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    // PROBLEME 4 FIX: Always succeed (no more random failure)
-    // TODO: Replace with actual Orange Money API call
-    const isSuccess = true;
-
-    if (!isSuccess) {
-      await saveRefToFirebase(txId, {
-        used: false,
-        failed: true,
-        amount: amount,
-        phoneMasked: phone.substring(0, 8) + '****',
-        reason: 'VERIFICATION_FAILED',
-        clientIP,
-      });
-
-      logSecurityEvent('PAYMENT_FAILED', req, {
-        txId,
-        amount,
-        ip: clientIP,
-      });
-
-      return res.status(402).json({
-        error: 'Paiement non vérifié. Veuillez vérifier votre référence.',
-        code: 'VERIFICATION_FAILED',
-        retry: true
+    const bookIds = items?.map(item => item.bookId).filter(Boolean) || [];
+    const bookPrices = await getBookPricesFromFirestore(bookIds);
+    
+    if (!bookIds.length || Object.keys(bookPrices).length === 0) {
+      logSecurityEvent('NO_ITEMS', req, { items });
+      return res.status(400).json({
+        error: 'Aucun article dans la commande',
+        code: 'EMPTY_CART'
       });
     }
 
+    let verifiedItems, serverTotal;
+    try {
+      const calcResult = await calculateVerifiedTotal(items, bookPrices);
+      serverTotal = calcResult.total;
+      verifiedItems = calcResult.verifiedItems;
+    } catch (calcError) {
+      logSecurityEvent('PRICE_CALCULATION_ERROR', req, {
+        error: calcError.message,
+      });
+      return res.status(400).json({
+        error: calcError.message || 'Erreur de calcul',
+        code: 'PRICE_ERROR'
+      });
+    }
+
+    if (amount < serverTotal) {
+      logSecurityEvent('INSUFFICIENT_PAYMENT', req, {
+        clientAmount: amount,
+        serverTotal: serverTotal,
+      });
+      return res.status(400).json({
+        error: `Montant insuffisant. Prix réel: ${serverTotal} GNF`,
+        code: 'INSUFFICIENT_AMOUNT',
+        requiredAmount: serverTotal
+      });
+    }
+
+    if (amount > serverTotal * 1.5) {
+      logSecurityEvent('EXCESSIVE_PAYMENT', req, {
+        clientAmount: amount,
+        serverTotal: serverTotal,
+      });
+      return res.status(400).json({
+        error: `Montant excessif. Prix réel: ${serverTotal} GNF`,
+        code: 'EXCESSIVE_AMOUNT',
+        requiredAmount: serverTotal
+      });
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 800));
+
     const orderId = generateOrderId();
 
-    // PROBLEME 2 FIX: Payment verification creates order as "pending"
-    // Admin must approve manually. OR if configured, we auto-approve after verification
-    // For now: create as "pending" for security, admin approves
     const orderData = {
       name: name,
       phone: phone,
       txId: txId,
       referencePaiement: txId,
       pin: pin,
-      originalTotal: amount,
+      originalTotal: serverTotal,
       discount: 0,
-      total: amount,
+      total: serverTotal,
       promoCode: promoCode || null,
-      status: 'pending', // Created as pending - admin approves after manual verification
-      items: items || [], // Client provides items
+      status: OM_REQUIRE_ADMIN_APPROVAL ? 'pending' : 'pending',
+      items: verifiedItems,
       createdAt: Date.now(),
       paymentVerified: true,
       paymentVerifiedAt: Date.now(),
+      serverVerified: true,
+      simulationMode: OM_SIMULATION_MODE,
+      requiresManualVerification: true,
     };
 
     const orderKey = await createOrderInFirebase(orderData);
     
-    // PROBLEME 2 FIX: After creating pending order, auto-approve since payment was verified
-    // If you want manual approval instead, remove this line
     if (orderKey) {
-      await updateOrderStatusInFirebase(orderKey, 'approved');
+      await updateOrderStatusInFirebase(orderKey, OM_SIMULATION_MODE && !OM_REQUIRE_ADMIN_APPROVAL ? 'approved' : 'pending');
     }
 
     // Save the payment ref to Firebase
     await saveRefToFirebase(txId, {
       used: true,
-      amount: amount,
+      amount: serverTotal,
       phoneMasked: phone.substring(0, 8) + '****',
       orderId: orderId,
       orderKey: orderKey,
-      status: 'VERIFIED',
+      status: OM_SIMULATION_MODE && !OM_REQUIRE_ADMIN_APPROVAL ? 'VERIFIED' : 'PENDING_VERIFICATION',
       clientIP,
+      simulationMode: OM_SIMULATION_MODE,
     });
 
     logSecurityEvent('PAYMENT_SUCCESS', req, {
@@ -250,10 +329,14 @@ async function processPayment(req, res) {
       success: true,
       orderId,
       orderKey,
-      message: 'Paiement vérifié et commande créée avec succès.',
-      amount: amount,
+      message: 'Commande créée. En attente de vérification.',
+      amount: serverTotal,
+      originalAmount: amount,
       reference: txId,
-      status: 'approved' // Return the actual status
+      status: OM_SIMULATION_MODE && !OM_REQUIRE_ADMIN_APPROVAL ? 'approved' : 'pending',
+      serverVerified: true,
+      simulationMode: OM_SIMULATION_MODE,
+      requiresManualVerification: OM_REQUIRE_ADMIN_APPROVAL || !OM_SIMULATION_MODE
     });
   } catch (error) {
     console.error('[Orange Money] Verification error:', error);

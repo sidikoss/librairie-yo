@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { Link } from "react-router-dom";
 import BookCard from "./BookCard";
 
 const BookGrid = memo(function BookGrid({
@@ -20,9 +21,10 @@ const BookGrid = memo(function BookGrid({
   return (
     <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
       {books.map((book, index) => (
-        <div
+        <Link
           key={book.id}
-          className="opacity-0-initial animate-fade-in-up fill-forwards"
+          to={`/livre/${book.id}`}
+          className="block opacity-0-initial animate-fade-in-up fill-forwards"
           style={{ animationDelay: `${Math.min(index * 80, 600)}ms` }}
         >
           <BookCard
@@ -31,7 +33,7 @@ const BookGrid = memo(function BookGrid({
             onToggleFavorite={onToggleFavorite}
             isFavorite={isFavorite(book.id)}
           />
-        </div>
+        </Link>
       ))}
     </div>
   );

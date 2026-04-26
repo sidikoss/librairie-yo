@@ -92,18 +92,24 @@ export default function CartPage() {
 
       {/* Cart summary */}
       <section className="card-surface overflow-hidden">
-        <div className="border-b border-slate-100 p-5">
+        <div className="border-b border-slate-100 bg-guinea-50 p-5 dark:bg-guinea-900/20">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Total ({items.length} article{items.length > 1 ? "s" : ""})</p>
-            <p className="font-heading text-2xl font-extrabold text-zinc-900 dark:text-white">{formatGNF(total)}</p>
+            <div>
+              <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Total ({items.length} article{items.length > 1 ? "s" : ""})</p>
+              <p className="text-xs text-zinc-400 dark:text-zinc-500">Prix officiels (vérifiés)</p>
+            </div>
+            <p className="font-heading text-3xl font-extrabold text-guinea-600">{formatGNF(total)}</p>
           </div>
         </div>
         <div className="grid gap-3 p-5 sm:grid-cols-2">
           <Link
             to="/checkout"
-            className="rounded-xl bg-gradient-to-r from-zinc-800 to-zinc-900 px-5 py-3 text-center text-sm font-bold text-white shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl dark:from-zinc-700 dark:to-zinc-800"
+            className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-guinea-500 to-guinea-600 px-5 py-4 text-center text-base font-bold text-white shadow-lg shadow-guinea-300/30 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-guinea-300/40"
           >
-            Continuer vers checkout
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c1 1 1 2.5 0 3.5L9 21" />
+            </svg>
+            Passer la commande
           </Link>
           <button
             onClick={() => { if (window.confirm("Êtes-vous sûr de vouloir vider votre panier ?")) clearCart(); }}
