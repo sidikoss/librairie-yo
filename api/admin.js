@@ -9,7 +9,9 @@ export default async function handler(req, res) {
   }
 
   const url = req.url || '';
+  console.log('[Admin] Request:', req.method, url);
   const action = req.query?.action;
+  console.log('[Admin] Action:', action);
   
   // Get all orders
   if (action === 'get-orders') {
@@ -28,6 +30,7 @@ export default async function handler(req, res) {
 const FALLBACK_PASSWORD = 'papiraro214365!';
 
 async function handleGetOrders(req, res) {
+  console.log('[Admin] handleGetOrders called, method:', req.method);
   if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
