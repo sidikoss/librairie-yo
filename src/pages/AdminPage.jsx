@@ -511,7 +511,7 @@ export default function AdminPage() {
               placeholder="Rechercher commande (nom, téléphone, transaction)"
               className="flex-1 rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
             />
-            <button onClick={() => { refreshCatalog(); setOrderSuccess("Donnéas actualisées!"); setTimeout(() => setOrderSuccess(""), 2000); }}
+            <button onClick={() => { refreshCatalog(true); setOrderSuccess("Donnéas actualisées!"); setTimeout(() => setOrderSuccess(""), 2000); }}
               className="rounded-xl bg-zinc-200 dark:bg-zinc-700 px-3 py-2 text-sm"
             >
               {syncing ? "..." : "Actualiser"}

@@ -1,7 +1,15 @@
 import { firebaseApi } from "./firebaseApi";
 
-export async function fetchOrders() {
-  const data = await firebaseApi.get("orders", 10000);
+export async function fetchOrders(options = {}) {
+  const data = await firebaseApi.get("orders", 10000, { cache: options.cache !== false });
+  if (!data) return [];
+  return Object.entries(data)
+    .map(([fbKey, value]) => ({ ...value, fbKey }))
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+}
+
+export async function fetchOrdersFresh() {
+  const data = await firebaseApi.get("orders", 10000, { cache: false });
   if (!data) return [];
   return Object.entries(data)
     .map(([fbKey, value]) => ({ ...value, fbKey }))

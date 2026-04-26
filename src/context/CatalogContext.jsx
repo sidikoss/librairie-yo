@@ -15,6 +15,7 @@ import {
   createPromoCode,
   deletePromoCode,
   fetchOrders,
+  fetchOrdersFresh,
   fetchPromoCodes,
   togglePromoCode,
   updateOrderStatus as apiUpdateOrderStatus,
@@ -58,14 +59,15 @@ export function CatalogProvider({ children }) {
     [],
   );
 
-  const refreshCatalog = useCallback(async () => {
+  const refreshCatalog = useCallback(async (useFresh = false) => {
     setError("");
     setSyncing(true);
 
     try {
+      const ordersFetcher = useFresh ? fetchOrdersFresh : fetchOrders;
       const [rawBooks, rawOrders, rawPromos] = await Promise.all([
         fetchBooks(),
-        fetchOrders(),
+        ordersFetcher(),
         fetchPromoCodes(),
       ]);
 
