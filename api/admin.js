@@ -13,6 +13,16 @@ export default async function handler(req, res) {
   const url = req.url || '';
   const action = req.query?.action;
   
+  // Debug endpoint
+  if (action === 'debug') {
+    return res.status(200).json({
+      FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID || null,
+      FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL || null,
+      FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY ? 'set (' + process.env.FIREBASE_PRIVATE_KEY.length + ' chars)' : null,
+      FIREBASE_DATABASE_URL: process.env.FIREBASE_DATABASE_URL || null,
+    });
+  }
+  
   // Handle order update via query param
   if (action === 'update-order' || url.includes('update-order')) {
     return handleOrderUpdate(req, res);
