@@ -10,10 +10,11 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const path = (req.url || '').split('?')[0];
+  const url = req.url || '';
+  const action = req.query?.action;
   
-  // Handle order update
-  if (path.includes('/update-order')) {
+  // Handle order update via query param
+  if (action === 'update-order' || url.includes('update-order')) {
     return handleOrderUpdate(req, res);
   }
   

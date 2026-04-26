@@ -208,7 +208,7 @@ export function CatalogProvider({ children }) {
       console.log('[Admin] Token exists:', !!token);
       
       if (token) {
-        const res = await fetch('/api/admin/update-order', {
+        const res = await fetch('/api/admin?action=update-order', {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
