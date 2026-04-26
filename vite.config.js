@@ -94,6 +94,13 @@ export default defineConfig({
               expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 * 30 },
               cacheableResponse: { statuses: [0, 200] }
             }
+          },
+          {
+            urlPattern: /^https:\/\/.*firebaseio\.com.*/i,
+            handler: 'NetworkOnly',
+            options: {
+              cacheName: 'firebase-api-cache',
+            }
           }
         ]
       }
