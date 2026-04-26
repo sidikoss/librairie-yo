@@ -22,6 +22,9 @@ const action = req.query?.action;
 }
 
 async function handleGetOrders(req, res) {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  
   try {
     const dbUrl = process.env.FIREBASE_DATABASE_URL || 'https://librairie-yo-default-rtdb.firebaseio.com';
     const r = await fetch(`${dbUrl}/orders.json`);
