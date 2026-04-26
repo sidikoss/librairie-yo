@@ -22,15 +22,11 @@ export default async function handler(req, res) {
   return handleLogin(req, res);
 }
 
-const ENVS = {
-  ADMIN_PASSWORD: (process.env.ADMIN_PASSWORD || '').trim(),
-  HAS_ADMIN: !!process.env.ADMIN_PASSWORD,
-  FALLBACK: 'papiraro214365!'
-};
+const FALLBACK_PASSWORD = 'papiraro214365!';
 
 async function handleLogin(req, res) {
   if (req.method === 'GET') {
-    return res.status(200).json({ ok: true, ...ENVS });
+    return res.status(200).json({ ok: true, service: 'admin' });
   }
   
   if (req.method !== 'POST') {
@@ -39,10 +35,7 @@ async function handleLogin(req, res) {
   
   try {
     const { password } = req.body || {};
-    const adminPassword = ENVS.ADMIN_PASSWORD || ENVS.FALLBACK;
-    
-    console.log('[Admin] Password received:', password ? password.length + ' chars' : 'empty');
-    console.log('[Admin] Env password set:', !!adminPassword, adminPassword ? adminPassword.length + ' chars' : '');
+    const adminPassword = (process.env.ADMIN_PASSWORD || '').trim() || FALLBACK_PASSWORD;
     
     if (!password) {
       return res.status(400).json({ error: 'Mot de passe requis' });
@@ -52,7 +45,6 @@ async function handleLogin(req, res) {
       return res.status(401).json({ error: 'Admin non configuré' });
     }
     
-    // Simple comparison
     if (password !== adminPassword) {
       return res.status(401).json({ error: 'Mot de passe incorrect' });
     }
