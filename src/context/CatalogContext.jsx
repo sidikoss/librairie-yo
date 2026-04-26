@@ -178,12 +178,22 @@ export function CatalogProvider({ children }) {
 
   const findOrdersByPhoneAndPin = async (phone, pin) => {
     const normalized = normalizePhone(phone);
-    const refreshedOrders = await fetchOrders();
-    setOrders(refreshedOrders);
-
-    return refreshedOrders.filter(
-      (order) => normalizePhone(order.phone) === normalized && String(order.pin) === String(pin),
-    );
+    try {
+      const res = await fetch('/api/user-orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: normalized, pin })
+      });
+      const data = await res.json();
+      if (data.success && data.orders) {
+        setOrders(data.orders);
+        return data.orders;
+      }
+      return [];
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
   };
 
   const setOrderStatus = async (orderId, status) => {
@@ -218,7 +228,7 @@ export function CatalogProvider({ children }) {
     await refreshCatalog();
   };
 
-  const value = {
+  const value = useMemo(() => ({
     books,
     orders,
     promoCodes,
@@ -245,7 +255,12 @@ export function CatalogProvider({ children }) {
     addPromo,
     togglePromo,
     removePromo,
-  };
+  }), [
+    books, orders, promoCodes, loading, syncing, error, lastSyncAt,
+    wishlistIds, favoriteBooks, totalSoldBooks, popularBooks, newBooks,
+    refreshCatalog, toggleWishlist, isFavorite, getBookById,
+    submitOrder, findOrdersByPhoneAndPin
+  ]);
 
   return <CatalogContext.Provider value={value}>{children}</CatalogContext.Provider>;
 }

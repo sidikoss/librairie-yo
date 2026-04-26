@@ -283,6 +283,20 @@ export function validateOrangeMoneyPayment(body) {
     phone: validatePhone,
     pin: validatePIN,
     promoCode: (val) => val ? validateString(val, { maxLength: 20 }).toUpperCase() : null,
+    items: (val) => validateArray(val, {
+      required: true,
+      minLength: 1,
+      itemValidator: (item) => validateObject(item, {
+        bookId: (v) => validateString(v, { required: true }),
+        title: (v) => validateString(v, { required: true }),
+        unitPrice: (v) => validateNumber(v, { required: true }),
+        qty: (v) => validateNumber(v, { required: true, min: 1 }),
+        image: (v) => v ? validateString(v) : null,
+        author: (v) => v ? validateString(v) : null,
+        pages: (v) => v !== undefined && v !== null ? validateNumber(v) : null,
+        category: (v) => v ? validateString(v) : null,
+      })
+    })
   });
 }
 

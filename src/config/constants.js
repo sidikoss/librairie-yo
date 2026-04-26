@@ -10,7 +10,7 @@ export const SUPPORT_EMAIL = "contact@librairie-yo-gui.vercel.app";
 
 export const FIREBASE_DB_URL = "https://librairie-yo-default-rtdb.firebaseio.com";
 
-export const OM_NUMBER = "224613908784";
+export const OM_NUMBER = "613908784";
 export const WA_NUMBER = "224661862044";
 
 export const PRICING_CONFIG = {

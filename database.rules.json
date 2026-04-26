@@ -2,7 +2,6 @@
   "rules": {
     ".read": false,
     ".write": false,
-    ".indexOn": ["status", "createdAt"],
     
     "catalog": {
       ".read": true,
@@ -20,19 +19,14 @@
       ".write": false
     },
     
-    // PROBLEME 3 FIX: Orders can only be read by owner or admin
+    // PROBLEME 3 FIX: Orders can only be read by admin on client-side
+    // Normal users will use the secure /api/user-orders endpoint
     "orders": {
-      ".read": "auth != null && (
-        // Owner can read their own orders
-        data.child('uid').val() === auth.uid ||
-        // OR owner can read by phone+pin combination (legacy support)
-        data.child('phone').val() === auth.token.phone ||
-        // OR admin with admin:true token
-        auth.token.admin === true
-      )",
+      ".read": "auth != null && auth.token.admin === true",
+      ".indexOn": ["phone", "status", "createdAt"],
       "$orderId": {
-        // Anyone can create new pending orders
-        ".write": "!data.exists() && newData.hasChildren(['phone','items','status']) && newData.child('status').val() === 'pending'",
+        // Orders are created server-side via Orange Money verification API
+        ".write": "auth != null && auth.token.admin === true",
         // Validate required fields
         ".validate": "newData.hasChildren(['phone','items','status','createdAt','total'])"
       }

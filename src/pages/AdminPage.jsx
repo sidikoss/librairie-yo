@@ -4,6 +4,8 @@
 import { useMemo, useState } from "react";
 import { STORAGE_KEYS } from "../config/constants";
 import { useCatalog } from "../context/CatalogContext";
+import { usePdfLibrary } from "../hooks/usePdfLibrary";
+import { generateMetadata } from "../services/claudeClient";
 import { formatGNF } from "../utils/format";
 
 const SESSION_TTL = 2 * 60 * 60 * 1000; // 2 h (doit correspondre à l'API)
@@ -109,6 +111,8 @@ export default function AdminPage() {
     code: "", discount: "", type: "percent", maxUses: "100",
   });
   const [savingBook, setSavingBook] = useState(false);
+  const [extracting, setExtracting] = useState(false);
+  const { pdfLib } = usePdfLibrary();
 
   // ── Derived data ─────────────────────────────────────────────────────────
 
@@ -180,8 +184,46 @@ export default function AdminPage() {
   const handleBookFileChange = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    const fileData = await readFileAsBase64(file);
-    setUploadPayload({ fileData, fileName: file.name, fileType: file.type || "application/octet-stream" });
+    setExtracting(true);
+    try {
+      const fileData = await readFileAsBase64(file);
+      setUploadPayload({ fileData, fileName: file.name, fileType: file.type || "application/octet-stream" });
+
+      if (file.type === "application/pdf" && pdfLib) {
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const pdfDoc = await pdfLib.getDocument({ data: arrayBuffer }).promise;
+          const page = await pdfDoc.getPage(1);
+          const viewport = page.getViewport({ scale: 1.0 });
+          const canvas = document.createElement("canvas");
+          const context = canvas.getContext("2d");
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          
+          await page.render({ canvasContext: context, viewport }).promise;
+          const coverImage = canvas.toDataURL("image/jpeg", 0.8);
+          
+          setBookDraft((p) => ({ ...p, image: coverImage }));
+
+          const textContent = await page.getTextContent();
+          const text = textContent.items.map(i => i.str).join(" ").substring(0, 1500);
+          
+          if (text.trim()) {
+            const meta = await generateMetadata(text);
+            setBookDraft((p) => ({
+              ...p,
+              title: meta.title || p.title,
+              author: meta.author || p.author,
+              description: meta.summary || p.description,
+            }));
+          }
+        } catch (extractError) {
+          console.error("Silent error during PDF/Claude extraction:", extractError);
+        }
+      }
+    } finally {
+      setExtracting(false);
+    }
   };
 
   const handleBookSubmit = async () => {
@@ -398,10 +440,14 @@ export default function AdminPage() {
                   onChange={(e) => setBookDraft((p) => ({ ...p, featured: e.target.checked }))}
                 /> Mettre en avant
               </label>
-              <input type="file" accept=".pdf,.epub,.txt"
-                onChange={handleBookFileChange}
-                className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm md:col-span-2"
-              />
+              <div className="md:col-span-2">
+                <input type="file" accept=".pdf,.epub,.txt"
+                  onChange={handleBookFileChange}
+                  disabled={extracting}
+                  className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm w-full"
+                />
+                {extracting && <p className="mt-1 text-xs text-brand-600 animate-pulse">Extraction de la couverture et analyse IA en cours...</p>}
+              </div>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               <button onClick={handleBookSubmit} disabled={savingBook}

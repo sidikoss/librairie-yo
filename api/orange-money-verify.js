@@ -140,7 +140,7 @@ async function processPayment(req, res) {
       });
     }
 
-    const { txId, amount, name, phone, pinHash, promoCode } = validatedData;
+    const { txId, amount, name, phone, pin, promoCode, items } = validatedData;
 
     // PROBLEME 1 FIX: Check in Firebase RTDB instead of localStorage
     const existingRef = await checkRefInFirebase(txId);
@@ -206,13 +206,13 @@ async function processPayment(req, res) {
       phone: phone,
       txId: txId,
       referencePaiement: txId,
-      pinHash: pinHash,
+      pin: pin,
       originalTotal: amount,
       discount: 0,
       total: amount,
       promoCode: promoCode || null,
       status: 'pending', // Created as pending - admin approves after manual verification
-      items: [], // Client must provide items when retrieving
+      items: items || [], // Client provides items
       createdAt: Date.now(),
       paymentVerified: true,
       paymentVerifiedAt: Date.now(),

@@ -39,7 +39,7 @@ function resolvePromo(promoCodes, code, subTotal) {
 
 function generateUssdCode(amount) {
   const amountInt = Math.round(amount);
-  return `*144*1*1*${OM_NUMBER}*${amountInt}*1#`;
+  return `*144*1*1*${OM_NUMBER}*${amountInt}*2#`;
 }
 
 
@@ -141,8 +141,18 @@ export default function CheckoutPage() {
           amount: finalTotal,
           name: sanitizeText(form.name.trim()),
           phone: normalizePhone(form.phone),
-          pinHash: pinValidation.pin,
+          pin: pinValidation.pin,
           promoCode: promo?.code || null,
+          items: items.map(item => ({
+            bookId: item.bookId || item.id,
+            title: item.title,
+            unitPrice: Number(item.unitPrice || 0),
+            qty: Number(item.qty || 1),
+            image: item.image || null,
+            author: item.author || null,
+            pages: item.pages || null,
+            category: item.category || null,
+          })),
           clientTimestamp: Date.now(),
           clientSecureToken: secureToken,
         })
@@ -154,10 +164,9 @@ export default function CheckoutPage() {
         throw new Error(data.error || "Erreur lors de la vérification du paiement.");
       }
 
-addUsedRef(ref);
+      addUsedRef(ref);
 
-      // La commande est déjà créée côté serveur dans /api/orange-money-verify
-      // Pas besoin de submitOrder() ici (évite la double création)
+      toast.success("Commande validée avec succès !");
       setSuccessPayload({ orderId: data.orderId, pin: form.pin, phone: normalizePhone(form.phone) });
       clearCart();
     } catch (err) {

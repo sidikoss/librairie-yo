@@ -32,7 +32,7 @@ export default function CatalogPage() {
   } = useCatalogFilters(books);
 
   const categoryOptions = useMemo(
-    () => categories.filter((item) => item !== "Autre"),
+    () => categories,
     [categories],
   );
 
