@@ -16,7 +16,8 @@ const BookCard = memo(function BookCard({
   const [isAdded, setIsAdded] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
 
-  const handleAddToCart = () => {
+  const handleAddToCart = (e) => {
+    e.preventDefault();
     onAddToCart(book);
     setIsAdded(true);
     setTimeout(() => {
@@ -29,14 +30,14 @@ const BookCard = memo(function BookCard({
       className="group flex h-full flex-col overflow-hidden rounded-card-lg border border-white/40 bg-white/90 shadow-soft-sm backdrop-blur-md transition-all duration-500 ease-out-expo hover:-translate-y-2 hover:shadow-card-hover"
       aria-labelledby={`book-title-${book.id}`}
     >
-      {/* Cover image with optimized loading */}
-      <div className="relative aspect-book overflow-hidden bg-gradient-to-br from-surface-50 via-brand-50/30 to-guinea-50/30">
+      {/* Cover image - clickable to view details */}
+      <Link to={`/livre/${book.id}`} className="relative block aspect-book overflow-hidden bg-gradient-to-br from-surface-50 via-brand-50/30 to-guinea-50/30">
         {book.image ? (
           <LazyImage
             src={book.image}
             alt={`Couverture du livre "${book.title}" par ${book.author}`}
             loadingStrategy="lazy"
-            className={`h-full w-full transition-all duration-700 ease-out-expo group-hover:scale-110 ${
+            className={`h-full w-full object-cover transition-all duration-700 ease-out-expo group-hover:scale-110 ${
               imageLoaded ? 'opacity-100' : 'opacity-0'
             }`}
             onLoad={() => setImageLoaded(true)}
@@ -69,7 +70,7 @@ const BookCard = memo(function BookCard({
 
         {/* Wishlist button */}
         <button
-          onClick={() => onToggleFavorite(book.id)}
+          onClick={(e) => { e.preventDefault(); onToggleFavorite(book.id); }}
           className={`absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full border border-white/60 text-sm shadow-lg backdrop-blur-md transition-all duration-300 hover:scale-110 ${
             isFavorite
               ? "bg-brand-500 text-white"
@@ -88,13 +89,14 @@ const BookCard = memo(function BookCard({
           rel="noopener noreferrer"
           className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-xl bg-guinea-600/90 px-3 py-2 text-xs font-semibold text-white opacity-0 shadow-lg backdrop-blur-sm transition-all duration-500 group-hover:opacity-100 hover:bg-guinea-600"
           aria-label={`Commander "${book.title}" via WhatsApp`}
+          onClick={(e) => e.stopPropagation()}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true" className="h-3.5 w-3.5 fill-current">
             <path d="M19.05 4.94A9.94 9.94 0 0 0 12 2C6.48 2 2 6.48 2 12c0 1.77.46 3.51 1.34 5.04L2 22l5.1-1.33A9.95 9.95 0 0 0 12 22c5.52 0 10-4.48 10-10 0-2.67-1.04-5.18-2.95-7.06ZM12 20.1c-1.52 0-3-.4-4.31-1.16l-.31-.18-3.03.79.81-2.95-.2-.31A8.03 8.03 0 0 1 4 12a8 8 0 1 1 8 8.1Z"/>
           </svg>
           WhatsApp
         </a>
-      </div>
+      </Link>
 
       {/* Card body */}
       <div className="flex flex-1 flex-col p-4">
@@ -137,13 +139,18 @@ const BookCard = memo(function BookCard({
           >
             {isAdded ? (
               <>
-                <svg className="h-4 w-4 animate-bounce-in" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                Ajouté !
+                Ajouté!
               </>
             ) : (
-              "Ajouter au panier"
+              <>
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                Ajouter au panier
+              </>
             )}
           </button>
         </div>
