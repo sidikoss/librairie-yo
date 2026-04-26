@@ -1,15 +1,5 @@
 {
   "github": { "silent": true },
-  "functions": {
-    "api/**/*.js": {
-      "runtime": "@vercel/node@2.0.0",
-      "output": {
-        "nodejs": {
-          "package": "module"
-        }
-      }
-    }
-  },
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/(.*)", "destination": "/index.html" }

@@ -102,6 +102,7 @@ export default function AdminPage() {
 
   // UI state
   const [activeTab, setActiveTab]       = useState("stats");
+  const [updatingOrderId, setUpdatingOrderId] = useState(null);
   const [bookDraft, setBookDraft]       = useState(emptyBookDraft);
   const [editingBookId, setEditingBookId] = useState("");
   const [uploadPayload, setUploadPayload] = useState(null);
@@ -517,12 +518,20 @@ export default function AdminPage() {
                   </span>
                   {order.status === "pending" && (
                     <>
-                      <button onClick={() => setOrderStatus(order.fbKey, "approved")}
-                        className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white"
-                      >Approuver</button>
-                      <button onClick={() => setOrderStatus(order.fbKey, "rejected")}
-                        className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white"
-                      >Rejeter</button>
+                      <button 
+                        onClick={() => { setUpdatingOrderId(order.fbKey); setOrderStatus(order.fbKey, "approved").finally(() => setUpdatingOrderId(null)); }} 
+                        disabled={updatingOrderId === order.fbKey}
+                        className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                      >
+                        {updatingOrderId === order.fbKey ? "..." : "Approuver"}
+                      </button>
+                      <button 
+                        onClick={() => { setUpdatingOrderId(order.fbKey); setOrderStatus(order.fbKey, "rejected").finally(() => setUpdatingOrderId(null)); }} 
+                        disabled={updatingOrderId === order.fbKey}
+                        className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                      >
+                        {updatingOrderId === order.fbKey ? "..." : "Rejeter"}
+                      </button>
                     </>
                   )}
                 </div>
