@@ -1,7 +1,9 @@
 import { firebaseApi } from "./firebaseApi";
 
 export async function fetchOrders(options = {}) {
+  console.log('[OrderService] fetchOrders called, cache:', options.cache);
   const data = await firebaseApi.get("orders", 10000, { cache: options.cache !== false });
+  console.log('[OrderService] got data:', data ? Object.keys(data).length + ' orders' : 'null');
   if (!data) return [];
   return Object.entries(data)
     .map(([fbKey, value]) => ({ ...value, fbKey }))
@@ -9,7 +11,9 @@ export async function fetchOrders(options = {}) {
 }
 
 export async function fetchOrdersFresh() {
+  console.log('[OrderService] fetchOrdersFresh called');
   const data = await firebaseApi.get("orders", 10000, { cache: false });
+  console.log('[OrderService] got fresh data:', data ? Object.keys(data).length + ' orders' : 'null');
   if (!data) return [];
   return Object.entries(data)
     .map(([fbKey, value]) => ({ ...value, fbKey }))
