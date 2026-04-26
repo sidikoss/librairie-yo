@@ -3,13 +3,20 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+  res.setHeader('Cache-Control', 'no-store, no-cache');
   
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-const action = req.query?.action;
+  const url = req.url || '';
+  const queryStart = url.indexOf('?');
+  const queryString = queryStart >= 0 ? url.slice(queryStart + 1) : '';
+  const params = new URLSearchParams(queryString);
+  const action = params.get('action') || '';
   
+  console.log('[admin] url:', url, 'action:', action);
+
   if (action === 'get-orders') {
     return handleGetOrders(req, res);
   }
