@@ -9,6 +9,7 @@ import { ensureReaderSession } from "../services/firebaseClient";
 import { formatGNF, normalizePhone, sanitizeText } from "../utils/format";
 import { validatePINFormat, generateSecureToken, hashPIN } from "../utils/crypto";
 import { OM_NUMBER } from "../config/constants";
+import { useToast } from "../components/ui/Toast";
 
 const USED_REFS_KEY = "yo_used_refs";
 
