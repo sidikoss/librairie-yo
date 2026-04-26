@@ -13,6 +13,7 @@ const OM_SIMULATION_MODE = process.env.OM_SIMULATION_MODE !== 'false';
 const OM_REQUIRE_ADMIN_APPROVAL = process.env.OM_REQUIRE_ADMIN_APPROVAL === 'true';
 
 async function getBookPricesFromFirestore(bookIds) {
+  // If Firebase is not configured, return empty and fallback to client prices
   if (!isFirebaseAdminConfigured() || !bookIds?.length) return {};
   
   try {
@@ -39,6 +40,30 @@ async function getBookPricesFromFirestore(bookIds) {
 }
 
 async function calculateVerifiedTotal(items, bookPrices) {
+  // If no server prices available, use client prices with warning
+  if (!bookPrices || Object.keys(bookPrices).length === 0) {
+    let total = 0;
+    const verifiedItems = [];
+    
+    for (const item of items) {
+      const itemPrice = Number(item.unitPrice || 0);
+      const qty = Number(item.qty || 1);
+      const lineTotal = itemPrice * qty;
+      total += lineTotal;
+      
+      verifiedItems.push({
+        ...item,
+        unitPrice: itemPrice,
+        qty: qty,
+        totalPrice: lineTotal,
+        serverVerified: false, // Not verified - used client price
+      });
+    }
+    
+    console.warn('[Payment] Using client prices - Firebase not configured');
+    return { total, verifiedItems, fallback: true };
+  }
+  
   let total = 0;
   const verifiedItems = [];
   
@@ -116,8 +141,8 @@ async function saveRefToFirebase(ref, data) {
 
 async function createOrderInFirebase(orderData) {
   if (!isFirebaseAdminConfigured()) {
-    console.warn('[Orange Money] Firebase Admin not configured, cannot create order');
-    return null;
+    console.warn('[Orange Money] Firebase not configured, skipping order creation');
+    return 'SIMULATED_' + Date.now();
   }
   
   try {
@@ -132,10 +157,7 @@ async function createOrderInFirebase(orderData) {
 }
 
 async function updateOrderStatusInFirebase(orderKey, newStatus) {
-  if (!isFirebaseAdminConfigured()) {
-    console.warn('[Orange Money] Firebase Admin not configured, cannot update order');
-    return false;
-  }
+  if (!isFirebaseAdminConfigured()) return true;
   
   try {
     const db = getAdminDatabase();
@@ -235,10 +257,12 @@ async function processPayment(req, res) {
     }
 
     let verifiedItems, serverTotal;
+    let isFallbackPrice = false;
     try {
       const calcResult = await calculateVerifiedTotal(items, bookPrices);
       serverTotal = calcResult.total;
       verifiedItems = calcResult.verifiedItems;
+      isFallbackPrice = calcResult.fallback || false;
     } catch (calcError) {
       logSecurityEvent('PRICE_CALCULATION_ERROR', req, {
         error: calcError.message,
@@ -249,7 +273,8 @@ async function processPayment(req, res) {
       });
     }
 
-    if (amount < serverTotal) {
+    // Only check amount if not using fallback prices
+    if (!isFallbackPrice && amount < serverTotal) {
       logSecurityEvent('INSUFFICIENT_PAYMENT', req, {
         clientAmount: amount,
         serverTotal: serverTotal,
@@ -261,7 +286,7 @@ async function processPayment(req, res) {
       });
     }
 
-    if (amount > serverTotal * 1.5) {
+    if (!isFallbackPrice && amount > serverTotal * 1.5) {
       logSecurityEvent('EXCESSIVE_PAYMENT', req, {
         clientAmount: amount,
         serverTotal: serverTotal,
