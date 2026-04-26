@@ -1,24 +1,31 @@
 // api/_lib/firebaseAdmin.js
 // Configuration Firebase Admin avec sécurité renforcée
-// Gère l'initialisation sécurisée du SDK Firebase côté serveur
 
-import { applicationDefault, cert, getApps, initializeApp } from "firebase-admin/app";
-import { getAuth } from "firebase-admin/auth";
-import { getDatabase } from "firebase-admin/database";
-import { getFirestore } from "firebase-admin/firestore";
-import { getStorage } from "firebase-admin/storage";
+let adminApp = null;
+let initError = null;
+let firebaseMod = null;
+
+async function loadFirebaseAdmin() {
+  if (firebaseMod) return firebaseMod;
+  try {
+    const mod = await import('firebase-admin');
+    firebaseMod = mod;
+    return mod;
+  } catch (e) {
+    console.error('[firebase-admin] Failed to load firebase-admin:', e.message);
+    return null;
+  }
+}
 
 const VALIDATION_ERRORS = [];
 
 function normalizePrivateKey(value) {
   if (!value || typeof value !== 'string') {
-    console.log('[firebase-admin] normalizePrivateKey: value is null/undefined or not a string');
     return null;
   }
   const normalized = value.replace(/\\n/g, '\n').replace(/\\r/g, '\r');
   if (!normalized.includes('-----BEGIN PRIVATE KEY-----')) {
-    console.log('[firebase-admin] normalizePrivateKey: missing BEGIN PRIVATE KEY, value starts with:', value.substring(0, 50));
-    VALIDATION_ERRORS.push('Firebase private key format invalide');
+    console.log('[firebase-admin] normalizePrivateKey: missing BEGIN PRIVATE KEY');
     return null;
   }
   return normalized;
@@ -55,10 +62,6 @@ function parseServiceAccount() {
   const CLIENT_EMAIL = trim(process.env.FIREBASE_CLIENT_EMAIL);
   const PRIVATE_KEY = trim(process.env.FIREBASE_PRIVATE_KEY);
   
-  console.log('[firebase-admin] PROJECT_ID:', PROJECT_ID ? PROJECT_ID.substring(0, 20) : 'undefined');
-  console.log('[firebase-admin] CLIENT_EMAIL:', CLIENT_EMAIL || 'undefined');
-  console.log('[firebase-admin] PRIVATE_KEY length:', PRIVATE_KEY ? PRIVATE_KEY.length : 'undefined');
-  
   const envAccount = {
     projectId: PROJECT_ID,
     clientEmail: CLIENT_EMAIL,
@@ -66,18 +69,13 @@ function parseServiceAccount() {
   };
 
   if (envAccount.projectId && envAccount.clientEmail && envAccount.privateKey) {
-    console.log('[firebase-admin] Config OK, validating');
     return validateServiceAccount(envAccount);
   }
 
-  console.warn('[firebase-admin] Aucune configuration Firebase Admin');
   return null;
 }
 
-let adminApp = null;
-let initError = null;
-
-function getAdminApp() {
+async function getAdminApp() {
   if (adminApp) {
     return adminApp;
   }
@@ -87,6 +85,13 @@ function getAdminApp() {
   }
   
   try {
+    const mod = await loadFirebaseAdmin();
+    if (!mod) {
+      throw new Error('firebase-admin non disponible');
+    }
+    
+    const { getApps, initializeApp, cert } = mod;
+    
     if (getApps().length > 0) {
       adminApp = getApps()[0];
       return adminApp;
@@ -95,11 +100,7 @@ function getAdminApp() {
     const serviceAccount = parseServiceAccount();
     
     if (!serviceAccount) {
-      throw new Error(
-        'Configuration Firebase Admin manquante. ' +
-        'Définissez FIREBASE_SERVICE_ACCOUNT_JSON ou ' +
-        '(FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY)'
-      );
+      throw new Error('Configuration Firebase Admin manquante');
     }
 
     const options = {
@@ -109,20 +110,9 @@ function getAdminApp() {
       },
     };
 
-    const databaseUrl = process.env.FIREBASE_DATABASE_URL || process.env.FIREBASE_DB_URL;
+    const databaseUrl = (process.env.FIREBASE_DATABASE_URL || '').trim();
     if (databaseUrl) {
-      if (!databaseUrl.startsWith('https://') && !databaseUrl.startsWith('http://')) {
-        throw new Error('FIREBASE_DATABASE_URL doit commencer par https://');
-      }
-      console.log('[firebase-admin] Using DATABASE_URL:', databaseUrl.substring(0, 30));
       options.databaseURL = databaseUrl;
-    }
-
-    if (process.env.FIREBASE_STORAGE_BUCKET) {
-      if (!process.env.FIREBASE_STORAGE_BUCKET.includes('.appspot.com')) {
-        console.warn('[firebase-admin] FIREBASE_STORAGE_BUCKET pourrait être invalide');
-      }
-      options.storageBucket = process.env.FIREBASE_STORAGE_BUCKET;
     }
 
     adminApp = initializeApp(options);
@@ -132,25 +122,29 @@ function getAdminApp() {
     return adminApp;
   } catch (error) {
     initError = error;
-    console.error('[firebase-admin] Erreur d\'initialisation:', error.message);
+    console.error('[firebase-admin] Erreur:', error.message);
     throw error;
   }
 }
 
-export function getAdminAuth() {
-  return getAuth(getAdminApp());
+export async function getAdminAuth() {
+  const mod = await loadFirebaseAdmin();
+  return mod.getAuth(await getAdminApp());
 }
 
-export function getAdminDatabase() {
-  return getDatabase(getAdminApp());
+export async function getAdminDatabase() {
+  const mod = await loadFirebaseAdmin();
+  return mod.getDatabase(await getAdminApp());
 }
 
-export function getAdminFirestore() {
-  return getFirestore(getAdminApp());
+export async function getAdminFirestore() {
+  const mod = await loadFirebaseAdmin();
+  return mod.getFirestore(await getAdminApp());
 }
 
-export function getAdminStorage() {
-  return getStorage(getAdminApp());
+export async function getAdminStorage() {
+  const mod = await loadFirebaseAdmin();
+  return mod.getStorage(await getAdminApp());
 }
 
 export function isFirebaseAdminConfigured() {
@@ -161,3 +155,6 @@ export function getFirebaseProjectId() {
   const account = parseServiceAccount();
   return account?.projectId || null;
 }
+
+// Legacy exports for compatibility
+export { getAdminDatabase as getAdminDb };
