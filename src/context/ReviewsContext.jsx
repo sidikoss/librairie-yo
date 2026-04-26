@@ -156,7 +156,6 @@ export function ReviewsProvider({ children }) {
     getReviewsForBook,
     getAverageRating,
     getRatingDistribution,
-    getRatingDistribution,
     addReview,
     updateReview,
     deleteReview,

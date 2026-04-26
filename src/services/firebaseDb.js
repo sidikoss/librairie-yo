@@ -97,9 +97,7 @@ export async function uploadFile(file, path) {
   return getDownloadURL(storageRef);
 }
 
-export { initializeFirebase as default };
-
-export default {
+export {
   initializeFirebase,
   addBook,
   getBooks,
