@@ -405,40 +405,4 @@ export default withRateLimit(handler, "/api/orange-money", {
   maxRequests: 15,
   windowMs: 60000
 });
-
-  try {
-    const { ref } = req.query;
-    
-    if (!ref) {
-      return res.status(400).json({ error: 'Référence requise' });
-    }
-
-    if (!isFirebaseAdminConfigured()) {
-      return res.status(404).json({ status: 'UNKNOWN', message: 'Firebase non configuré' });
-    }
-
-    const db = getAdminDatabase();
-    const refSnapshot = await db.ref(`usedPaymentRefs/${ref}`).once('value');
-    const paymentData = refSnapshot.val();
-
-    if (!paymentData) {
-      return res.status(404).json({ status: 'UNKNOWN', message: 'Référence non trouvée' });
-    }
-
-    const isExpired = Date.now() > (paymentData.expiresAt || 0);
-
-    if (isExpired) {
-      return res.status(404).json({ status: 'EXPIRED', message: 'Référence expirée' });
-    }
-
-    return res.status(200).json({
-      status: paymentData.status || 'UNKNOWN',
-      orderId: paymentData.orderId,
-      amount: paymentData.amount,
-      verifiedAt: paymentData.usedAt
-    });
-  } catch (error) {
-    console.error('[Orange Money Status] Error:', error);
-    return res.status(500).json({ error: 'Erreur serveur' });
-  }
 }
