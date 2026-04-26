@@ -27,6 +27,10 @@
     --text-on-accent: #ffffff;
   }
 
+  html {
+    font-size: 15px;
+  }
+
   .dark {
     --bg-primary: #09090b;
     --bg-secondary: #18181b;
