@@ -136,12 +136,18 @@ export function ToastProvider({ children, position = "top-right", duration = 400
   );
 }
 
+function noop() {}
+const noopToast = {
+  success: noop,
+  error: noop,
+  warning: noop,
+  info: noop,
+  remove: noop,
+};
+
 export function useToast() {
   const context = useContext(ToastContext);
-  if (!context) {
-    throw new Error("useToast must be used within ToastProvider");
-  }
-  return context;
+  return context || noopToast;
 }
 
 export default ToastProvider;
