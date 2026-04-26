@@ -105,6 +105,7 @@ export default function AdminPage() {
   // UI state
   const [activeTab, setActiveTab]       = useState("stats");
   const [updatingOrderId, setUpdatingOrderId] = useState(null);
+  const [debugInfo, setDebugInfo] = useState("");
   const [bookDraft, setBookDraft]       = useState(emptyBookDraft);
   const [editingBookId, setEditingBookId] = useState("");
   const [uploadPayload, setUploadPayload] = useState(null);
@@ -511,12 +512,23 @@ export default function AdminPage() {
               placeholder="Rechercher commande (nom, téléphone, transaction)"
               className="flex-1 rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
             />
-            <button onClick={() => { refreshCatalog(true); setOrderSuccess("Donnéas actualisées!"); setTimeout(() => setOrderSuccess(""), 2000); }}
+            <button onClick={async () => { 
+              setDebugInfo("Chargement...");
+              try {
+                await refreshCatalog(true);
+                setOrderSuccess("Donnéas actualisées!");
+                setDebugInfo(`OK: ${orders.length} commandes`);
+              } catch(e) {
+                setDebugInfo("Erreur: " + e.message);
+              }
+              setTimeout(() => setOrderSuccess(""), 2000); 
+            }}
               className="rounded-xl bg-zinc-200 dark:bg-zinc-700 px-3 py-2 text-sm"
             >
               {syncing ? "..." : "Actualiser"}
             </button>
           </div>
+          {debugInfo && <p className="text-xs text-blue-600 mb-2">{debugInfo}</p>}
           <div className="space-y-2">
             {filteredOrders.map((order) => (
               <article key={order.fbKey} className="rounded-xl border border-slate-200 p-3">
