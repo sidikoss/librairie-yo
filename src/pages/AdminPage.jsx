@@ -99,6 +99,8 @@ export default function AdminPage() {
   const [password, setPassword]     = useState("");
   const [loginError, setLoginError] = useState("");
   const [loginBusy, setLoginBusy]   = useState(false);
+  const [orderError, setOrderError] = useState("");
+  const [orderSuccess, setOrderSuccess] = useState("");
 
   // UI state
   const [activeTab, setActiveTab]       = useState("stats");
@@ -426,6 +428,14 @@ export default function AdminPage() {
                 onChange={(e) => setBookDraft((p) => ({ ...p, stock: e.target.value }))}
                 placeholder="Stock" className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
               />
+              <div className="flex gap-1">
+                {[100, 50, 20].map((n) => (
+                  <button key={n} onClick={() => setBookDraft((p) => ({ ...p, stock: n }))}
+                    className={`px-2 py-1 text-xs rounded ${Number(bookDraft.stock) === n ? 'bg-brand-600 text-white' : 'bg-zinc-200 dark:bg-zinc-700'}`}>
+                    {n}
+                  </button>
+                ))}
+              </div>
               <input type="number" min="0" value={bookDraft.manualPrice}
                 onChange={(e) => setBookDraft((p) => ({ ...p, manualPrice: e.target.value }))}
                 placeholder="Override prix manuel (optionnel)"
@@ -519,14 +529,36 @@ export default function AdminPage() {
                   {order.status === "pending" && (
                     <>
                       <button 
-                        onClick={() => { setUpdatingOrderId(order.fbKey); setOrderStatus(order.fbKey, "approved").finally(() => setUpdatingOrderId(null)); }} 
+                        onClick={async () => {
+                          setOrderError("");
+                          setOrderSuccess("");
+                          setUpdatingOrderId(order.fbKey);
+                          try {
+                            await setOrderStatus(order.fbKey, "approved");
+                            setOrderSuccess(`Commande ${order.fbKey.substring(0,8)}... approuvée!`);
+                          } catch(e) {
+                            setOrderError(e.message);
+                          } finally {
+                            setUpdatingOrderId(null);
+                          }
+                        }} 
                         disabled={updatingOrderId === order.fbKey}
                         className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
                       >
                         {updatingOrderId === order.fbKey ? "..." : "Approuver"}
                       </button>
                       <button 
-                        onClick={() => { setUpdatingOrderId(order.fbKey); setOrderStatus(order.fbKey, "rejected").finally(() => setUpdatingOrderId(null)); }} 
+                        onClick={async () => {
+                          setOrderError("");
+                          setUpdatingOrderId(order.fbKey);
+                          try {
+                            await setOrderStatus(order.fbKey, "rejected");
+                          } catch(e) {
+                            setOrderError(e.message);
+                          } finally {
+                            setUpdatingOrderId(null);
+                          }
+                        }} 
                         disabled={updatingOrderId === order.fbKey}
                         className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
                       >
@@ -535,6 +567,8 @@ export default function AdminPage() {
                     </>
                   )}
                 </div>
+                {orderError && <p className="text-red-600 text-xs mt-1">{orderError}</p>}
+                {orderSuccess && <p className="text-emerald-600 text-xs mt-1">{orderSuccess}</p>}
               </article>
             ))}
           </div>
