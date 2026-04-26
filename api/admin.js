@@ -101,7 +101,10 @@ async function handleOrderUpdate(req, res) {
     try {
       const { getAdminDatabase, isFirebaseAdminConfigured } = await import('./_lib/firebaseAdmin.js');
       
-      if (isFirebaseAdminConfigured()) {
+      const configured = isFirebaseAdminConfigured();
+      console.log('[Admin] Firebase configured:', configured);
+      
+      if (configured) {
         const db = getAdminDatabase();
         await db.ref(`orders/${orderId}`).update({
           status,
@@ -112,7 +115,8 @@ async function handleOrderUpdate(req, res) {
         return res.status(200).json({ ok: true, orderId, status, note: 'Firebase non configuré' });
       }
     } catch (e) {
-      return res.status(200).json({ ok: true, orderId, status, note: 'Firebase non configuré' });
+      console.error('[Admin] Firebase error:', e.message);
+      return res.status(200).json({ ok: true, orderId, status, note: 'Firebase non configuré: ' + e.message });
     }
 
   } catch (error) {
