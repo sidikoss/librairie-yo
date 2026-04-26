@@ -506,11 +506,18 @@ export default function AdminPage() {
       {/* ── ORDERS ── */}
       {activeTab === "orders" && (
         <section className="card-surface p-4">
-          <input value={orderQuery} onChange={(e) => setOrderQuery(e.target.value)}
-            placeholder="Rechercher commande (nom, téléphone, transaction)"
-            className="w-full rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
-          />
-          <div className="mt-3 space-y-2">
+          <div className="flex gap-2 items-center mb-3">
+            <input value={orderQuery} onChange={(e) => setOrderQuery(e.target.value)}
+              placeholder="Rechercher commande (nom, téléphone, transaction)"
+              className="flex-1 rounded-xl border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
+            />
+            <button onClick={() => { refreshCatalog(); setOrderSuccess("Donnéas actualisées!"); setTimeout(() => setOrderSuccess(""), 2000); }}
+              className="rounded-xl bg-zinc-200 dark:bg-zinc-700 px-3 py-2 text-sm"
+            >
+              {syncing ? "..." : "Actualiser"}
+            </button>
+          </div>
+          <div className="space-y-2">
             {filteredOrders.map((order) => (
               <article key={order.fbKey} className="rounded-xl border border-slate-200 p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
