@@ -102,6 +102,16 @@ export default function AdminPage() {
   const [orderError, setOrderError] = useState("");
   const [orderSuccess, setOrderSuccess] = useState("");
 
+  // Fetch orders from server API (bypasses client-side Firebase issues)
+  async function fetchOrdersFromServer() {
+    const res = await fetch("/api/admin?action=get-orders");
+    const data = await res.json();
+    if (data.ok && data.orders) {
+      return data.orders;
+    }
+    throw new Error(data.error || "Erreur chargement");
+  }
+
   // UI state
   const [activeTab, setActiveTab]       = useState("stats");
   const [updatingOrderId, setUpdatingOrderId] = useState(null);
@@ -515,13 +525,12 @@ export default function AdminPage() {
             <button onClick={async () => { 
               setDebugInfo("Chargement...");
               try {
-                await refreshCatalog(true);
-                setOrderSuccess("Donnéas actualisées!");
-                setDebugInfo(`OK: ${orders.length} commandes`);
+                const serverOrders = await fetchOrdersFromServer();
+                setDebugInfo(`OK: ${serverOrders.length} commandes depuis serveur`);
               } catch(e) {
                 setDebugInfo("Erreur: " + e.message);
               }
-              setTimeout(() => setOrderSuccess(""), 2000); 
+              setTimeout(() => setDebugInfo(""), 3000); 
             }}
               className="rounded-xl bg-zinc-200 dark:bg-zinc-700 px-3 py-2 text-sm"
             >
