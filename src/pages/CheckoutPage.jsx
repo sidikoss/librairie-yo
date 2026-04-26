@@ -129,7 +129,7 @@ export default function CheckoutPage() {
       
       try { const s = await ensureReaderSession(); uid = s?.uid || ""; } catch {}
       
-      const response = await fetch('/api/orange-money-verify', {
+      const response = await fetch('/api/orange-money', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

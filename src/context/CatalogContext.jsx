@@ -179,7 +179,7 @@ export function CatalogProvider({ children }) {
   const findOrdersByPhoneAndPin = async (phone, pin) => {
     const normalized = normalizePhone(phone);
     try {
-      const res = await fetch('/api/user-orders', {
+      const res = await fetch('/api/user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: normalized, pin })

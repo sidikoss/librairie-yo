@@ -52,7 +52,7 @@ function clearAdminSession() {
 // ── Server auth ──────────────────────────────────────────────────────────────
 
 async function loginWithPassword(password) {
-  const res = await fetch("/api/admin-auth", {
+  const res = await fetch("/api/admin", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ password }),

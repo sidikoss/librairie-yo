@@ -1,6 +1,5 @@
-// api/orange-money-verify.js
-// Verification des paiements Orange Money
-// Uses Firebase RTDB for persistent storage of used refs
+// orange-money.js - Combined Orange Money API
+// Handles both verification and status queries
 
 import { withRateLimit } from "./_lib/rateLimiter";
 import { applySecurityHeaders } from "./_lib/securityHeaders";
@@ -9,7 +8,7 @@ import { sanitizeRequestBody, xssDetection } from "./_lib/sanitization";
 import { logSecurityEvent, securityMiddleware, detectBruteForce } from "./_lib/securityMonitor";
 import { getAdminDatabase, getAdminFirestore, isFirebaseAdminConfigured } from "./_lib/firebaseAdmin";
 
-const PAYMENT_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const PAYMENT_TTL_MS = 24 * 60 * 60 * 1000;
 const OM_SIMULATION_MODE = process.env.OM_SIMULATION_MODE !== 'false';
 const OM_REQUIRE_ADMIN_APPROVAL = process.env.OM_REQUIRE_ADMIN_APPROVAL === 'true';
 
@@ -349,7 +348,61 @@ async function processPayment(req, res) {
   }
 }
 
-export default withRateLimit(processPayment, "/api/orange-money-verify", {
-  maxRequests: 10,
+export default async function handler(req, res) {
+  applySecurityHeaders(res);
+  
+  const path = req.url || "";
+  
+  if (path.includes("/status")) {
+    return handleStatus(req, res);
+  }
+  
+  return processPayment(req, res);
+}
+
+export default withRateLimit(handler, "/api/orange-money", {
+  maxRequests: 15,
   windowMs: 60000
 });
+
+async function handleStatus(req, res) {
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method Not Allowed' });
+  }
+
+  try {
+    const { ref } = req.query;
+    
+    if (!ref) {
+      return res.status(400).json({ error: 'Référence requise' });
+    }
+
+    if (!isFirebaseAdminConfigured()) {
+      return res.status(404).json({ status: 'UNKNOWN', message: 'Firebase non configuré' });
+    }
+
+    const db = getAdminDatabase();
+    const refSnapshot = await db.ref(`usedPaymentRefs/${ref}`).once('value');
+    const paymentData = refSnapshot.val();
+
+    if (!paymentData) {
+      return res.status(404).json({ status: 'UNKNOWN', message: 'Référence non trouvée' });
+    }
+
+    const isExpired = Date.now() > (paymentData.expiresAt || 0);
+
+    if (isExpired) {
+      return res.status(404).json({ status: 'EXPIRED', message: 'Référence expirée' });
+    }
+
+    return res.status(200).json({
+      status: paymentData.status || 'UNKNOWN',
+      orderId: paymentData.orderId,
+      amount: paymentData.amount,
+      verifiedAt: paymentData.usedAt
+    });
+  } catch (error) {
+    console.error('[Orange Money Status] Error:', error);
+    return res.status(500).json({ error: 'Erreur serveur' });
+  }
+}
