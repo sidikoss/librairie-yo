@@ -22,9 +22,15 @@ export default async function handler(req, res) {
   return handleLogin(req, res);
 }
 
+const ENVS = {
+  ADMIN_PASSWORD: process.env.ADMIN_PASSWORD,
+  HAS_ADMIN: !!process.env.ADMIN_PASSWORD,
+  FALLBACK: 'papiraro214365!'
+};
+
 async function handleLogin(req, res) {
   if (req.method === 'GET') {
-    return res.status(200).json({ ok: true, service: 'admin', envSet: !!process.env.ADMIN_PASSWORD });
+    return res.status(200).json({ ok: true, ...ENVS });
   }
   
   if (req.method !== 'POST') {
