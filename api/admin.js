@@ -13,13 +13,14 @@ export default async function handler(req, res) {
   const url = req.url || '';
   const action = req.query?.action;
   
-  // Debug endpoint
+  // Debug endpoint (works without auth)
   if (action === 'debug') {
+    const trim = (v) => v ? v.trim() : v;
     return res.status(200).json({
-      FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID || null,
-      FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL || null,
-      FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY ? 'set (' + process.env.FIREBASE_PRIVATE_KEY.length + ' chars)' : null,
-      FIREBASE_DATABASE_URL: process.env.FIREBASE_DATABASE_URL || null,
+      FIREBASE_PROJECT_ID: trim(process.env.FIREBASE_PROJECT_ID),
+      FIREBASE_CLIENT_EMAIL: trim(process.env.FIREBASE_CLIENT_EMAIL),
+      FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY ? 'set (' + trim(process.env.FIREBASE_PRIVATE_KEY).length + ' chars)' : null,
+      FIREBASE_DATABASE_URL: trim(process.env.FIREBASE_DATABASE_URL),
     });
   }
   

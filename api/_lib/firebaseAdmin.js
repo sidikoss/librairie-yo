@@ -50,9 +50,10 @@ function validateServiceAccount(account) {
 }
 
 function parseServiceAccount() {
-  const PROJECT_ID = process.env.FIREBASE_PROJECT_ID;
-  const CLIENT_EMAIL = process.env.FIREBASE_CLIENT_EMAIL;
-  const PRIVATE_KEY = process.env.FIREBASE_PRIVATE_KEY;
+  const trim = (v) => v ? v.trim() : v;
+  const PROJECT_ID = trim(process.env.FIREBASE_PROJECT_ID);
+  const CLIENT_EMAIL = trim(process.env.FIREBASE_CLIENT_EMAIL);
+  const PRIVATE_KEY = trim(process.env.FIREBASE_PRIVATE_KEY);
   
   console.log('[firebase-admin] PROJECT_ID:', PROJECT_ID ? PROJECT_ID.substring(0, 20) : 'undefined');
   console.log('[firebase-admin] CLIENT_EMAIL:', CLIENT_EMAIL || 'undefined');
