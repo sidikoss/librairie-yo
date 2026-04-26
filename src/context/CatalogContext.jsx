@@ -197,6 +197,28 @@ export function CatalogProvider({ children }) {
   };
 
   const setOrderStatus = async (orderId, status) => {
+    // Try admin API first (server-side)
+    try {
+      const token = localStorage.getItem('adminToken');
+      if (token) {
+        const res = await fetch('/api/admin/update-order', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ orderId, status })
+        });
+        if (res.ok) {
+          await refreshCatalog();
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('[Admin] API update failed:', e.message);
+    }
+    
+    // Fallback to Firebase API (client-side)
     await apiUpdateOrderStatus(orderId, status);
     await refreshCatalog();
   };
