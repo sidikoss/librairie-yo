@@ -23,7 +23,7 @@ export default async function handler(req, res) {
 }
 
 const ENVS = {
-  ADMIN_PASSWORD: process.env.ADMIN_PASSWORD,
+  ADMIN_PASSWORD: (process.env.ADMIN_PASSWORD || '').trim(),
   HAS_ADMIN: !!process.env.ADMIN_PASSWORD,
   FALLBACK: 'papiraro214365!'
 };
@@ -39,7 +39,7 @@ async function handleLogin(req, res) {
   
   try {
     const { password } = req.body || {};
-    const adminPassword = process.env.ADMIN_PASSWORD || 'fallback_default_password_2024';
+    const adminPassword = ENVS.ADMIN_PASSWORD || ENVS.FALLBACK;
     
     console.log('[Admin] Password received:', password ? password.length + ' chars' : 'empty');
     console.log('[Admin] Env password set:', !!adminPassword, adminPassword ? adminPassword.length + ' chars' : '');
