@@ -26,8 +26,16 @@ async function handleUserOrders(req, res) {
       return res.status(400).json({ error: 'Téléphone et PIN requis.' });
     }
 
-    const ordersRes = await fetch(`${FIREBASE_DB_URL}/orders.json`);
+    const dbUrl = process.env.FIREBASE_DATABASE_URL || 'https://librairie-yo-default-rtdb.firebaseio.com';
+    console.log('[Orders] Fetching from:', dbUrl);
+
+    const ordersRes = await fetch(`${dbUrl}/orders.json`);
+    if (!ordersRes.ok) {
+      console.error('[Orders] Fetch failed:', ordersRes.status);
+      return res.status(500).json({ error: 'Erreur de connexion Firebase' });
+    }
     const allOrders = await ordersRes.json() || {};
+    console.log('[Orders] Total orders:', Object.keys(allOrders).length);
     
     const matchingOrders = [];
     for (const [key, order] of Object.entries(allOrders)) {
