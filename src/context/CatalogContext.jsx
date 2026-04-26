@@ -197,9 +197,16 @@ export function CatalogProvider({ children }) {
   };
 
   const setOrderStatus = async (orderId, status) => {
-    // Try admin API first (server-side)
+    console.log('[Admin] Updating order:', orderId, 'to', status);
+    
+    // Try admin API first (server-side) - use same key as AdminPage.jsx
+    const SESSION_KEY = STORAGE_KEYS.adminSession;
+    
     try {
-      const token = localStorage.getItem('adminToken');
+      const raw = localStorage.getItem(SESSION_KEY);
+      const token = raw ? JSON.parse(raw)?.token : null;
+      console.log('[Admin] Token exists:', !!token);
+      
       if (token) {
         const res = await fetch('/api/admin/update-order', {
           method: 'POST',
@@ -209,9 +216,16 @@ export function CatalogProvider({ children }) {
           },
           body: JSON.stringify({ orderId, status })
         });
+        console.log('[Admin] API response:', res.status);
+        
         if (res.ok) {
+          const data = await res.json();
+          console.log('[Admin] API success:', data);
           await refreshCatalog();
           return;
+        } else {
+          const data = await res.json();
+          console.error('[Admin] API error:', data);
         }
       }
     } catch (e) {
@@ -219,6 +233,7 @@ export function CatalogProvider({ children }) {
     }
     
     // Fallback to Firebase API (client-side)
+    console.log('[Admin] Trying client-side Firebase update...');
     await apiUpdateOrderStatus(orderId, status);
     await refreshCatalog();
   };
