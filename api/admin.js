@@ -8,45 +8,30 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const url = req.url || '';
-  console.log('[Admin] Request:', req.method, url);
   const action = req.query?.action;
-  console.log('[Admin] Action:', action);
   
-  // Get all orders
   if (action === 'get-orders') {
     return handleGetOrders(req, res);
   }
   
-  // Update order status
-  if (action === 'update-order' || url.includes('update-order')) {
+  if (action === 'update-order') {
     return handleOrderUpdate(req, res);
   }
   
-  // Default: handle login
   return handleLogin(req, res);
 }
 
-const FALLBACK_PASSWORD = 'papiraro214365!';
-
 async function handleGetOrders(req, res) {
-  console.log('[Admin] handleGetOrders called, method:', req.method);
-  if (req.method !== 'GET' && req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-  
   try {
     const dbUrl = process.env.FIREBASE_DATABASE_URL || 'https://librairie-yo-default-rtdb.firebaseio.com';
     
     const ordersRes = await fetch(`${dbUrl}/orders.json`);
     if (!ordersRes.ok) {
-      console.error('[Admin] Fetch orders failed:', ordersRes.status);
       return res.status(500).json({ error: 'Erreur de connexion Firebase' });
     }
     
     const ordersData = await ordersRes.json() || {};
     
-    // Convert to array and sort by createdAt desc
     const orders = Object.entries(ordersData).map(([key, order]) => ({
       ...order,
       fbKey: key
@@ -55,8 +40,7 @@ async function handleGetOrders(req, res) {
     return res.status(200).json({ ok: true, orders, count: orders.length });
     
   } catch (error) {
-    console.error('[Admin] get-orders error:', error.message);
-    return res.status(500).json({ error: 'Erreur serveur: ' + error.message });
+    return res.status(500).json({ error: error.message });
   }
 }
 
@@ -75,7 +59,7 @@ async function handleLogin(req, res) {
       body = JSON.parse(body);
     }
     const { password } = body || {};
-    const adminPassword = (process.env.ADMIN_PASSWORD || '').trim() || FALLBACK_PASSWORD;
+    const adminPassword = process.env.ADMIN_PASSWORD || 'papiraro214365!';
     
     if (!password) {
       return res.status(400).json({ error: 'Mot de passe requis' });
@@ -93,7 +77,6 @@ async function handleLogin(req, res) {
     return res.status(200).json({ ok: true, token });
 
   } catch (error) {
-    console.error('[Admin] Error:', error.message);
     return res.status(500).json({ error: 'Erreur serveur' });
   }
 }
@@ -129,41 +112,22 @@ async function handleOrderUpdate(req, res) {
     if (!orderId || !status) {
       return res.status(400).json({ error: 'orderId et status requis' });
     }
-    
-    if (!['approved', 'rejected', 'pending'].includes(status)) {
-      return res.status(400).json({ error: 'Status invalide' });
-    }
 
     const dbUrl = process.env.FIREBASE_DATABASE_URL || 'https://librairie-yo-default-rtdb.firebaseio.com';
-    
-    // Update order status in Firebase using PATCH
-    const updateData = { 
-      status,
-      reviewedAt: Date.now()
-    };
     
     const updateRes = await fetch(`${dbUrl}/orders/${orderId}.json`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updateData)
+      body: JSON.stringify({ status, reviewedAt: Date.now() })
     });
     
     if (!updateRes.ok) {
-      console.error('[Admin] PATCH failed:', updateRes.status);
       return res.status(500).json({ error: 'Erreur mise à jour Firebase' });
     }
     
-    console.log('[Admin] Order updated:', orderId, '->', status);
-    
-    return res.status(200).json({ 
-      ok: true, 
-      orderId, 
-      status,
-      note: 'Status mis à jour avec succès' 
-    });
+    return res.status(200).json({ ok: true, orderId, status });
 
   } catch (error) {
-    console.error('[Admin] Error:', error.message);
-    return res.status(500).json({ error: 'Erreur serveur: ' + error.message });
+    return res.status(500).json({ error: error.message });
   }
 }
