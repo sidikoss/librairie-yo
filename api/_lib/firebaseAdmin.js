@@ -9,8 +9,9 @@ async function loadFirebaseAdmin() {
   if (firebaseMod) return firebaseMod;
   try {
     const mod = await import('firebase-admin');
-    firebaseMod = mod;
-    return mod;
+    // firebase-admin v13 retourne parfois le module dans .default
+    firebaseMod = mod.default || mod;
+    return firebaseMod;
   } catch (e) {
     console.error('[firebase-admin] Failed to load firebase-admin:', e.message);
     return null;
@@ -90,7 +91,14 @@ async function getAdminApp() {
       throw new Error('firebase-admin non disponible');
     }
     
-    const { getApps, initializeApp, cert } = mod;
+    // Gestion des deux formats d'export (v12 vs v13)
+    const getApps = mod.getApps || (mod.default && mod.default.getApps);
+    const initializeApp = mod.initializeApp || (mod.default && mod.default.initializeApp);
+    const cert = mod.cert || (mod.default && mod.default.cert);
+    
+    if (!getApps || !initializeApp || !cert) {
+      throw new Error('Impossible d\'extraire les fonctions firebase-admin');
+    }
     
     if (getApps().length > 0) {
       adminApp = getApps()[0];
