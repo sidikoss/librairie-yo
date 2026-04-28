@@ -1,16 +1,15 @@
 // user.js - User orders + promo validation
-// FIX: utilise Firebase Admin SDK au lieu du fetch REST (bloqué par les règles DB)
 export const runtime = 'nodejs';
 
 import { getAdminDatabase, isFirebaseAdminConfigured } from './_lib/firebaseAdmin.js';
 
 export default async function handler(req, res) {
   const path = req.url || "";
-   
+  
   if (path.includes("/promo")) {
     return handlePromo(req, res);
   }
-   
+  
   return handleUserOrders(req, res);
 }
 
@@ -26,7 +25,7 @@ async function handleUserOrders(req, res) {
         return res.status(400).json({ error: 'JSON invalide' });
       }
     }
-     
+    
     const phone = body?.phone;
     const pin = body?.pin;
 
@@ -34,7 +33,6 @@ async function handleUserOrders(req, res) {
       return res.status(400).json({ error: 'Téléphone et PIN requis.' });
     }
 
-    // FIX: utiliser Firebase Admin SDK (bypasse les règles de sécurité côté serveur)
     if (!isFirebaseAdminConfigured()) {
       console.error('[Orders] Firebase Admin not configured');
       return res.status(500).json({ error: 'Service non configuré' });
@@ -73,7 +71,6 @@ async function handlePromo(req, res) {
     const { code } = req.body;
     if (!code) return res.status(400).json({ error: 'Code manquant' });
 
-    // FIX: utiliser Firebase Admin SDK pour les promos aussi
     if (!isFirebaseAdminConfigured()) {
       return res.status(500).json({ error: 'Service non configuré' });
     }
