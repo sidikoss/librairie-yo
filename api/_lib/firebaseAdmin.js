@@ -1,32 +1,8 @@
 // api/_lib/firebaseAdmin.js
-// Configuration Firebase Admin avec sécurité renforcée
+import admin from 'firebase-admin';
 
 let adminApp = null;
 let initError = null;
-let adminModule = null;
-
-async function loadFirebaseAdmin() {
-  if (adminModule) return adminModule;
-  try {
-    // Import firebase-admin (v12+ ES module)
-    const mod = await import('firebase-admin');
-    
-    // firebase-admin v13 ESM exports directly
-    // Try different export patterns
-    if (mod.initializeApp) {
-      adminModule = mod;
-    } else if (mod.default) {
-      adminModule = mod.default;
-    } else {
-      adminModule = mod;
-    }
-    
-    return adminModule;
-  } catch (e) {
-    console.error('[firebase-admin] Failed to load:', e.message);
-    return null;
-  }
-}
 
 function normalizePrivateKey(value) {
   if (!value || typeof value !== 'string') return null;
@@ -41,15 +17,9 @@ function normalizePrivateKey(value) {
 function validateServiceAccount(account) {
   if (!account) return null;
   const errors = [];
-  if (!account.projectId || typeof account.projectId !== 'string') {
-    errors.push('projectId manquant ou invalide');
-  }
-  if (!account.clientEmail || !account.clientEmail.includes('@')) {
-    errors.push('clientEmail manquant ou invalide');
-  }
-  if (!account.privateKey || !account.privateKey.startsWith('-----BEGIN')) {
-    errors.push('privateKey manquante ou malformée');
-  }
+  if (!account.projectId || typeof account.projectId !== 'string') errors.push('projectId manquant ou invalide');
+  if (!account.clientEmail || !account.clientEmail.includes('@')) errors.push('clientEmail manquant ou invalide');
+  if (!account.privateKey || !account.privateKey.startsWith('-----BEGIN')) errors.push('privateKey manquante ou malformée');
   if (errors.length > 0) {
     console.error('[firebase-admin] Validation échouée:', errors.join('; '));
     return null;
@@ -69,10 +39,9 @@ function parseServiceAccount() {
     privateKey: normalizePrivateKey(PRIVATE_KEY),
   };
 
-  if (envAccount.projectId && envAccount.clientEmail && envAccount.privateKey) {
-    return validateServiceAccount(envAccount);
-  }
-  return null;
+  return (envAccount.projectId && envAccount.clientEmail && envAccount.privateKey) 
+    ? validateServiceAccount(envAccount) 
+    : null;
 }
 
 async function getAdminApp() {
@@ -80,10 +49,6 @@ async function getAdminApp() {
   if (initError) throw initError;
 
   try {
-    const admin = await loadFirebaseAdmin();
-    if (!admin) throw new Error('firebase-admin non disponible');
-
-    // Check if already initialized
     if (admin.getApps().length > 0) {
       adminApp = admin.getApps()[0];
       return adminApp;
@@ -111,22 +76,18 @@ async function getAdminApp() {
 }
 
 export async function getAdminAuth() {
-  const admin = await loadFirebaseAdmin();
   return admin.getAuth(await getAdminApp());
 }
 
 export async function getAdminDatabase() {
-  const admin = await loadFirebaseAdmin();
   return admin.getDatabase(await getAdminApp());
 }
 
 export async function getAdminFirestore() {
-  const admin = await loadFirebaseAdmin();
   return admin.getFirestore(await getAdminApp());
 }
 
 export async function getAdminStorage() {
-  const admin = await loadFirebaseAdmin();
   return admin.getStorage(await getAdminApp());
 }
 
