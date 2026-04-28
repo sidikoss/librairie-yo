@@ -3,43 +3,51 @@ import { getDatabase } from 'firebase-admin/database';
 
 let app = null;
 
-function normalizePrivateKey(key) {
-  if (!key) return null;
-  
-  // Remplacer les \n littéraux par de vrais newlines
-  let normalized = key.replace(/\\n/g, '\n');
-  
-  // S'assurer que la clé a le bon format PEM
-  if (!normalized.includes('-----BEGIN PRIVATE KEY-----')) {
-    console.error('[firebase-admin] Clé privée invalide: pas de BEGIN PRIVATE KEY');
-    return null;
-  }
-  
-  return normalized;
-}
-
 function getServiceAccount() {
   // Priorité 1 : JSON complet
   const json = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (json) {
     try {
       const parsed = JSON.parse(json);
+      const privateKey = parsed.private_key;
+      
+      // Vérifier et corriger le format de la clé
+      let normalizedKey = privateKey;
+      
+      // Si la clé contient des \n littéraux (pas de vrais newlines), les convertir
+      if (privateKey && !privateKey.includes('\n') && privateKey.includes('\\n')) {
+        normalizedKey = privateKey.replace(/\\n/g, '\n');
+      }
+      
+      // Vérifier que la clé est valide
+      if (!normalizedKey || !normalizedKey.includes('-----BEGIN PRIVATE KEY-----')) {
+        console.error('[firebase-admin] Clé privée invalide: format incorrect');
+        return null;
+      }
+      
       return {
         projectId: parsed.project_id,
         clientEmail: parsed.client_email,
-        privateKey: normalizePrivateKey(parsed.private_key),
+        privateKey: normalizedKey,
       };
     } catch (e) {
-      console.error('[firebase-admin] JSON parse error:', e.message);
+      console.error('[firebase-admin] Erreur parsing JSON service account:', e.message);
     }
   }
   
   // Priorité 2 : variables séparées
   if (process.env.FIREBASE_PROJECT_ID) {
+    let privateKey = process.env.FIREBASE_PRIVATE_KEY || '';
+    
+    // Normaliser les newlines
+    if (privateKey && !privateKey.includes('\n') && privateKey.includes('\\n')) {
+      privateKey = privateKey.replace(/\\n/g, '\n');
+    }
+    
     return {
       projectId: process.env.FIREBASE_PROJECT_ID,
       clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: normalizePrivateKey(process.env.FIREBASE_PRIVATE_KEY),
+      privateKey: privateKey,
     };
   }
   
@@ -56,11 +64,11 @@ export function getAdminApp() {
 
   const serviceAccount = getServiceAccount();
   if (!serviceAccount?.projectId || !serviceAccount?.privateKey) {
-    throw new Error('Firebase Admin: service account missing');
+    throw new Error('Firebase Admin: service account manquant ou invalide');
   }
 
   console.log('[firebase-admin] Initialisation avec projectId:', serviceAccount.projectId);
-  console.log('[firebase-admin] privateKey starts with:', serviceAccount.privateKey.substring(0, 50));
+  console.log('[firebase-admin] Clé privée commence par:', serviceAccount.privateKey.substring(0, 40));
 
   app = initializeApp({
     credential: cert(serviceAccount),
