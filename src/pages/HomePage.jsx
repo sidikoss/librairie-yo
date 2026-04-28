@@ -9,6 +9,7 @@ import SEO from "../components/seo/SEO";
 import { useCart } from "../context/CartContext";
 import { useCatalog } from "../context/CatalogContext";
 import StarRating from "../components/ui/RatingStars";
+import { ChevronRight } from "lucide-react";
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -22,6 +23,7 @@ export default function HomePage() {
     toggleWishlist,
     isFavorite,
     totalSoldBooks,
+    categories,
   } = useCatalog();
 
   const heroBooks = useMemo(() => popularBooks.slice(0, 4), [popularBooks]);
@@ -43,7 +45,7 @@ export default function HomePage() {
       <HeroSection />
 
       {error ? (
-        <div className="card-surface border-brand-200 bg-brand-50/50 p-4 text-sm text-brand-600">
+        <div className="border border-red-200 bg-red-50 p-4 text-sm text-red-600 rounded-lg">
           <span className="mr-2 font-bold">⚠️</span>
           {error}
         </div>
@@ -51,7 +53,31 @@ export default function HomePage() {
 
       <CustomerTrustSection totalSoldBooks={totalSoldBooks} />
 
-      {/* Popular books */}
+      {/* Categories Section */}
+      {categories && categories.length > 0 && (
+        <section>
+          <SectionHeader
+            eyebrow="Catégories"
+            title="Explorez par catégorie"
+            description="Trouvez facilement vos livres par catégorie"
+          />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {categories.slice(0, 8).map((cat) => (
+              <button
+                key={cat.id || cat.name}
+                onClick={() => navigate(`/categorie/${cat.name}`)}
+                className="p-4 bg-white border rounded-xl hover:border-green-500 hover:shadow-md transition text-left"
+              >
+                <span className="text-2xl mb-2 block">{cat.emoji || "📚"}</span>
+                <p className="font-semibold text-sm text-gray-800">{cat.name}</p>
+                <p className="text-xs text-gray-500 mt-1">{cat.count || ""} livres</p>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Popular books - Top Sales */}
       <section>
         <SectionHeader
           eyebrow="Top ventes"
@@ -64,7 +90,7 @@ export default function HomePage() {
           </div>
         ) : (
           <BookGrid
-            books={heroBooks}
+            books={popularBooks}
             onAddToCart={addItem}
             onToggleFavorite={toggleWishlist}
             isFavorite={isFavorite}
@@ -75,11 +101,20 @@ export default function HomePage() {
 
       {/* New books */}
       <section>
-        <SectionHeader
-          eyebrow="Nouveautés"
-          title="Dernières sorties"
-          description="Nouveaux titres disponibles, prêts pour achat rapide via WhatsApp."
-        />
+        <div className="flex items-center justify-between mb-6">
+          <SectionHeader
+            eyebrow="Nouveautés"
+            title="Dernières sorties"
+            description="Nouveaux titres disponibles, prêts pour achat rapide via WhatsApp."
+          />
+          <button
+            onClick={() => navigate("/catalogue")}
+            className="hidden md:flex items-center gap-1 text-sm text-green-600 hover:text-green-700 font-semibold"
+          >
+            Voir tout
+            <ChevronRight size={16} />
+          </button>
+        </div>
         <BookGrid
           books={newBooks}
           onAddToCart={addItem}
@@ -89,65 +124,61 @@ export default function HomePage() {
         />
       </section>
 
+      {/* Customer Reviews Section */}
+      <section className="bg-gray-50 rounded-2xl p-6 md:p-8">
+        <SectionHeader
+          eyebrow="Témoignages"
+          title="Avis clients"
+          description="Ce que disent nos clients satisfaits"
+        />
+        <div className="grid md:grid-cols-3 gap-6 mt-6">
+          {[
+            { name: "Aminata K.", rating: 5, comment: "Très bon service ! Livraison rapide et livres de qualité." },
+            { name: "Moussa D.", rating: 5, comment: "Paiement Orange Money super simple. Je recommande !" },
+            { name: "Fatou S.", rating: 4, comment: "Bon choix de livres. Le panier est très pratique." }
+          ].map((review, i) => (
+            <div key={i} className="bg-white p-4 rounded-xl shadow-sm border">
+              <div className="flex items-center gap-2 mb-2">
+                <StarRating rating={review.rating} />
+              </div>
+              <p className="text-gray-600 text-sm mb-2">"{review.comment}"</p>
+              <p className="font-semibold text-sm text-gray-800">{review.name}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* CTA Section */}
-      <section className="relative overflow-hidden rounded-3xl border border-white/50 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-8 text-center shadow-2xl sm:p-12">
-        {/* Background decoration */}
+      <section className="relative overflow-hidden rounded-3xl bg-gray-900 p-8 text-center shadow-2xl">
         <div className="absolute inset-0 overflow-hidden" aria-hidden="true">
-          <div className="absolute -right-12 -top-12 h-48 w-48 rounded-full bg-brand-500/10 blur-3xl" />
-          <div className="absolute -bottom-12 -left-12 h-48 w-48 rounded-full bg-guinea-500/10 blur-3xl" />
-          <div className="absolute left-1/2 top-1/2 h-32 w-32 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent-500/10 blur-3xl" />
+          <div className="absolute -right-12 -top-12 h-48 w-48 rounded-full bg-green-500/10 blur-3xl" />
+          <div className="absolute -bottom-12 -left-12 h-48 w-48 rounded-full bg-green-500/10 blur-3xl" />
         </div>
 
         <div className="relative">
-          <h3 className="font-heading text-2xl font-extrabold text-white sm:text-3xl">
+          <h3 className="font-bold text-2xl text-white mb-3">
             Prêt à commander ?
           </h3>
-          <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-zinc-300 dark:text-zinc-400">
+          <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-gray-300">
             Explorez tout le catalogue et finalisez rapidement votre achat sur WhatsApp.
           </p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             <button
               onClick={() => navigate("/catalogue")}
-              className="group rounded-2xl bg-gradient-to-r from-brand-500 to-brand-600 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-brand-500/25 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-brand-500/30"
+              className="group rounded-2xl bg-green-600 px-6 py-3.5 text-sm font-bold text-white shadow-lg transition-all duration-300 hover:-translate-y-1 hover:bg-green-700"
             >
               <span className="flex items-center gap-2">
                 Voir tout le catalogue
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
+                <ChevronRight size={16} className="transition-transform duration-300 group-hover:translate-x-1" />
               </span>
             </button>
-            <div className="flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold text-zinc-300 dark:text-zinc-400 backdrop-blur-sm">
-              <span className="h-2 w-2 rounded-full bg-guinea-400 animate-pulse-soft" />
+            <div className="flex items-center gap-2 rounded-full border border-gray-700 bg-gray-800 px-4 py-2 text-xs font-semibold text-gray-300">
+              <span className="h-2 w-2 rounded-full bg-green-400 animate-pulse" />
               {books.length} livres disponibles
             </div>
           </div>
         </div>
-       </section>
-
-       {/* Customer Reviews Section */}
-       <section className="bg-gray-50 rounded-2xl p-6 md:p-8">
-         <SectionHeader
-           eyebrow="Témoignages"
-           title="Avis clients"
-           description="Ce que disent nos clients satisfaits"
-         />
-         <div className="grid md:grid-cols-3 gap-6 mt-6">
-           {[
-             { name: "Aminata K.", rating: 5, comment: "Très bon service ! Livraison rapide et livres de qualité." },
-             { name: "Moussa D.", rating: 5, comment: "Paiement Orange Money super simple. Je recommande !" },
-             { name: "Fatou S.", rating: 4, comment: "Bon choix de livres. Le panier est très pratique." }
-           ].map((review, i) => (
-             <div key={i} className="bg-white p-4 rounded-xl shadow-sm">
-               <div className="flex items-center gap-2 mb-2">
-                 <StarRating rating={review.rating} />
-               </div>
-               <p className="text-gray-600 text-sm mb-2">"{review.comment}"</p>
-               <p className="font-semibold text-sm text-gray-800">{review.name}</p>
-             </div>
-           ))}
-         </div>
-       </section>
-     </div>
-   );
- }
+      </section>
+    </div>
+  );
+}
