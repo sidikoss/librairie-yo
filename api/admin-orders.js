@@ -1,18 +1,19 @@
 // admin-orders.js - Get all orders
 // FIX: utilise Firebase Admin SDK au lieu du fetch REST non authentifié
+export const runtime = 'nodejs';
+
+import { getAdminDatabase, isFirebaseAdminConfigured } from './_lib/firebaseAdmin.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Cache-Control', 'no-store, no-cache');
-  
+   
   try {
-    const { getAdminDatabase, isFirebaseAdminConfigured } = await import('./_lib/firebaseAdmin.js');
-    
     if (!isFirebaseAdminConfigured()) {
       return res.status(500).json({ error: 'Firebase Admin non configuré — vérifier les variables d\'environnement Vercel' });
     }
 
-    const db = await getAdminDatabase();
+    const db = getAdminDatabase();
     const snapshot = await db.ref('orders').once('value');
     const data = snapshot.val() || {};
     

@@ -1,17 +1,20 @@
 // orange-money.js - Minimal Payment API
+export const runtime = 'nodejs';
+
+import { getAdminDatabase, isFirebaseAdminConfigured } from './_lib/firebaseAdmin.js';
 
 export default async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  
+   
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
   const path = (req.url || '').split('?')[0];
-  
+   
   // Handle status endpoint
   if (path.includes('/status')) {
     return res.status(200).json({ status: 'OK', message: 'Payment service ready' });
@@ -21,7 +24,7 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     try {
       const body = req.body;
-      
+       
       // Simple validation
       if (!body || !body.txId) {
         return res.status(400).json({ error: 'Référence requise' });
@@ -40,7 +43,7 @@ export default async function handler(req, res) {
       }
 
       const { txId, amount, name, phone, pin, items } = body;
-      
+       
       // Calculate total from client prices
       let total = 0;
       const verifiedItems = items.map(item => {
@@ -55,28 +58,29 @@ export default async function handler(req, res) {
       // Try to create order in Firebase (if configured)
       let orderKey = null;
       try {
-        const { getAdminDatabase, isFirebaseAdminConfigured } = await import('./_lib/firebaseAdmin.js');
-        
-         if (isFirebaseAdminConfigured()) {
-          const db = await getAdminDatabase();
-          const ref = db.ref('orders').push();
-          await ref.set({
-            name: String(name || '').slice(0, 100),
-            phone: String(phone || '').slice(0, 20),
-            txId: String(txId || '').slice(0, 50),
-            pin: String(pin || '').slice(0, 4),
-            total,
-            originalTotal: amount,
-            status: 'pending',
-            items: verifiedItems,
-            createdAt: Date.now()
-          });
-          orderKey = ref.key;
+        if (!isFirebaseAdminConfigured()) {
+          throw new Error('Firebase Admin non configuré — vérifier FIREBASE_SERVICE_ACCOUNT_JSON dans Vercel');
         }
-       } catch (e) {
-         console.error('[Payment] Firebase error:', e.message);
-         return res.status(500).json({ error: 'Impossible de sauvegarder la commande: ' + e.message });
-       }
+
+        const db = getAdminDatabase();
+        const ref = db.ref('orders').push();
+        await ref.set({
+          name: String(name || '').slice(0, 100),
+          phone: String(phone || '').slice(0, 20),
+          txId: String(txId || '').slice(0, 50),
+          pin: String(pin || '').slice(0, 4),
+          total,
+          originalTotal: amount,
+          status: 'pending',
+          items: verifiedItems,
+          createdAt: Date.now()
+        });
+        orderKey = ref.key;
+        console.log('[Payment] Order saved to Firebase:', orderKey);
+      } catch (e) {
+        console.error('[Payment] Firebase error:', e.message);
+        return res.status(500).json({ error: 'Impossible de sauvegarder la commande: ' + e.message });
+      }
 
       return res.status(200).json({
         success: true,
