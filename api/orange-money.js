@@ -57,8 +57,8 @@ export default async function handler(req, res) {
       try {
         const { getAdminDatabase, isFirebaseAdminConfigured } = await import('./_lib/firebaseAdmin.js');
         
-        if (isFirebaseAdminConfigured()) {
-          const db = getAdminDatabase();
+         if (isFirebaseAdminConfigured()) {
+          const db = await getAdminDatabase();
           const ref = db.ref('orders').push();
           await ref.set({
             name: String(name || '').slice(0, 100),
@@ -73,9 +73,10 @@ export default async function handler(req, res) {
           });
           orderKey = ref.key;
         }
-      } catch (e) {
-        console.log('[Payment] Firebase not configured, order saved locally');
-      }
+       } catch (e) {
+         console.error('[Payment] Firebase error:', e.message);
+         return res.status(500).json({ error: 'Impossible de sauvegarder la commande: ' + e.message });
+       }
 
       return res.status(200).json({
         success: true,
