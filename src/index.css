@@ -507,13 +507,41 @@
     aspect-ratio: 3 / 4;
   }
 
-  /* Mask gradients */
-  .mask-fade-bottom {
-    mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
-    -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
-  }
-  .mask-fade-top {
-    mask-image: linear-gradient(to top, black 60%, transparent 100%);
-    -webkit-mask-image: linear-gradient(to top, black 60%, transparent 100%);
-  }
+   /* Mask gradients */
+   .mask-fade-bottom {
+     mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+     -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+   }
+   .mask-fade-top {
+     mask-image: linear-gradient(to top, black 60%, transparent 100%);
+     -webkit-mask-image: linear-gradient(to top, black 60%, transparent 100%);
+   }
+
+   /* Product card hover animation */
+   .card {
+     transition: all 0.3s ease;
+   }
+   .card:hover {
+     transform: translateY(-10px);
+   }
+
+   /* Button hover scale */
+   button {
+     transition: all 0.3s ease;
+   }
+   button:hover {
+     transform: scale(1.05);
+   }
+
+   /* Responsive grid for mobile */
+   @media (max-width: 768px) {
+     .grid {
+       grid-template-columns: 1fr !important;
+     }
+     
+     img {
+       max-width: 100%;
+       height: auto;
+     }
+   }
 }

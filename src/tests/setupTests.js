@@ -35,7 +35,12 @@ Object.defineProperty(window, 'crypto', {
       return arr;
     },
     subtle: {
-      digest: vi.fn(() => Promise.resolve(new ArrayBuffer(32))),
+      digest: vi.fn((options, data) => {
+        const hashBuffer = new ArrayBuffer(32);
+        const hashArray = new Uint8Array(hashBuffer);
+        for (let i = 0; i < 32; i++) hashArray[i] = i;
+        return Promise.resolve(hashBuffer);
+      }),
     },
   },
 });

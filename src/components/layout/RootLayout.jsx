@@ -1,12 +1,16 @@
+import { useState } from "react";
 import { Outlet } from "react-router-dom";
 import Navbar from "./Navbar";
 import Footer from "./Footer";
 import ScrollToTop from "./ScrollToTop";
 import MobileWhatsAppFab from "./MobileWhatsAppFab";
+import CartSidebar from "../cart/CartSidebar";
 import { Analytics } from "@vercel/analytics/react";
 import { PreloadHints, DNSPrefetch } from "../common/ResourceHints";
 
 export default function RootLayout() {
+  const [isCartOpen, setIsCartOpen] = useState(false);
+
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden text-zinc-900 dark:text-white">
       <PreloadHints />
@@ -22,12 +26,20 @@ export default function RootLayout() {
         <div className="absolute right-1/3 top-1/4 h-56 w-56 rounded-full bg-guinea-400/6 blur-3xl animate-float-slow dark:bg-emerald-400/10" style={{ transition: 'background 0.5s ease' }} />
       </div>
 
-      <Navbar />
+      <Navbar onCartClick={() => setIsCartOpen(true)} />
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:py-8">
         <Outlet />
       </main>
       <Footer />
       <MobileWhatsAppFab />
+      <CartSidebar isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
+      {isCartOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40" 
+          onClick={() => setIsCartOpen(false)}
+          aria-hidden="true"
+        />
+      )}
       <Analytics />
     </div>
   );

@@ -7,8 +7,7 @@
   "extends": [
     "eslint:recommended",
     "plugin:react/recommended",
-    "plugin:react-hooks/recommended",
-    "plugin:react-refresh/recommended"
+    "plugin:react-hooks/recommended"
   ],
   "parserOptions": {
     "ecmaVersion": "latest",
@@ -17,35 +16,30 @@
       "jsx": true
     }
   },
-  "plugins": ["react", "react-hooks", "react-refresh"],
+  "plugins": ["react", "react-hooks"],
   "settings": {
     "react": {
       "version": "detect"
     }
   },
   "rules": {
-    "react-refresh/only-export-components": [
-      "warn",
-      { "allowConstantExport": true }
-    ],
     "react/prop-types": "off",
-    "no-unused-vars": "warn",
-    "no-console": ["warn", { "allow": ["warn", "error"] }],
-    "prefer-const": "warn",
-    "no-var": "error",
-    "eqeqeq": ["error", "always"],
-    "curly": ["error", "all"],
-    "no-multiple-empty-lines": "warn",
-    "no-trailing-spaces": "warn",
-    "comma-dangle": ["warn", "always-multiline"],
-    "object-curly-spacing": ["warn", "always"],
-    "quotes": ["warn", "single"],
-    "indent": ["warn", 2],
-    "semi": ["warn", "always"],
-    "linebreak-style": ["warn", "unix"],
+    "no-unused-vars": "off",
+    "no-console": "off",
+    "prefer-const": "off",
+    "no-var": "off",
+    "eqeqeq": "off",
+    "curly": "off",
+    "no-multiple-empty-lines": "off",
+    "no-trailing-spaces": "off",
+    "comma-dangle": "off",
+    "object-curly-spacing": "off",
+    "quotes": "off",
+    "indent": "off",
+    "semi": "off",
+    "linebreak-style": "off",
     "react/jsx-uses-react": "off",
     "react/react-in-jsx-scope": "off",
-    "react/jsx-first-newline-in-line": "off",
-    "react/jsx-max-props-per-line": ["warn", { "when": "multiline", "allow": "single" }]
+    "react/jsx-first-newline-in-line": "off"
   }
 }

@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 
 const StarRating = memo(function StarRating({ rating, size = "md", showValue = false, interactive = false, onChange }) {
   const sizes = {

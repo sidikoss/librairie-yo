@@ -98,7 +98,6 @@ export async function uploadFile(file, path) {
 }
 
 export {
-  initializeFirebase,
   addBook,
   getBooks,
   updateBook,

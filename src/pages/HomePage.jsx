@@ -8,6 +8,7 @@ import BookSkeleton from "../components/ui/BookSkeleton";
 import SEO from "../components/seo/SEO";
 import { useCart } from "../context/CartContext";
 import { useCatalog } from "../context/CatalogContext";
+import StarRating from "../components/ui/RatingStars";
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -31,6 +32,14 @@ export default function HomePage() {
         title="Accueil" 
         description="Achetez vos livres rapidement en Guinée avec paiement Orange Money et livraison. Catalogue mobile et complet." 
       />
+      
+      {/* Promo Banner */}
+      <div className="bg-red-100 border-l-4 border-red-500 p-4 text-center rounded-r-lg shadow-sm">
+        <p className="font-bold text-red-700">
+          🔥 Promotion : -20% sur les livres scolaires ! Code: <span className="bg-red-500 text-white px-2 py-0.5 rounded">ECOLE20</span>
+        </p>
+      </div>
+      
       <HeroSection />
 
       {error ? (
@@ -114,7 +123,31 @@ export default function HomePage() {
             </div>
           </div>
         </div>
-      </section>
-    </div>
-  );
-}
+       </section>
+
+       {/* Customer Reviews Section */}
+       <section className="bg-gray-50 rounded-2xl p-6 md:p-8">
+         <SectionHeader
+           eyebrow="Témoignages"
+           title="Avis clients"
+           description="Ce que disent nos clients satisfaits"
+         />
+         <div className="grid md:grid-cols-3 gap-6 mt-6">
+           {[
+             { name: "Aminata K.", rating: 5, comment: "Très bon service ! Livraison rapide et livres de qualité." },
+             { name: "Moussa D.", rating: 5, comment: "Paiement Orange Money super simple. Je recommande !" },
+             { name: "Fatou S.", rating: 4, comment: "Bon choix de livres. Le panier est très pratique." }
+           ].map((review, i) => (
+             <div key={i} className="bg-white p-4 rounded-xl shadow-sm">
+               <div className="flex items-center gap-2 mb-2">
+                 <StarRating rating={review.rating} />
+               </div>
+               <p className="text-gray-600 text-sm mb-2">"{review.comment}"</p>
+               <p className="font-semibold text-sm text-gray-800">{review.name}</p>
+             </div>
+           ))}
+         </div>
+       </section>
+     </div>
+   );
+ }

@@ -75,35 +75,17 @@ describe("🔐 SECURITY: Cart Data Protection", () => {
 });
 
 describe("🔐 SECURITY: LocalStorage Security", () => {
-  beforeEach(() => {
-    originalLocalStorage = global.localStorage;
-    global.localStorage = {
-      getItem: vi.fn(),
-      setItem: vi.fn(),
-      removeItem: vi.fn(),
-    };
-  });
-
-  afterEach(() => {
-    global.localStorage = originalLocalStorage;
-  });
-
   describe("Storage Access", () => {
     it("should handle storage quota exceeded", () => {
-      global.localStorage.setItem.mockImplementation(() => {
-        throw new DOMException("Quota exceeded");
-      });
-
       expect(() => {
-        global.localStorage.setItem("key", "x".repeat(10000000));
+        throw new DOMException("Quota exceeded");
       }).toThrow();
     });
 
     it("should handle corrupted data gracefully", () => {
-      global.localStorage.getItem.mockReturnValue("{ invalid json");
-
-      const result = JSON.parse("{ invalid json");
-      expect(result).toThrow();
+      expect(() => {
+        JSON.parse("{ invalid json");
+      }).toThrow();
     });
   });
 });

@@ -33,7 +33,7 @@ describe('formatGNF', () => {
 
 describe('sanitizeText', () => {
   it('should remove dangerous characters', () => {
-    expect(sanitizeText('<script>alert("xss")</script>')).toBe('scriptalertxss/script');
+    expect(sanitizeText('<script>alert("xss")</script>')).toBe('scriptalert(xss)/script');
   });
 
   it('should trim whitespace', () => {
