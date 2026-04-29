@@ -3,12 +3,16 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    @apply scroll-smooth;
+  }
+
   body {
-    @apply min-h-screen font-sans text-zinc-900 antialiased bg-white;
+    @apply min-h-screen bg-surface-50 font-sans text-zinc-900 antialiased;
   }
 
   .dark body {
-    @apply text-white bg-zinc-900;
+    @apply bg-zinc-900 text-white;
   }
 
   * {
@@ -22,10 +26,39 @@
 
 @layer components {
   .card-surface {
-    @apply rounded-2xl border shadow-sm backdrop-blur-md bg-white/80;
+    @apply rounded-2xl border border-white/40 bg-white/85 shadow-soft-sm backdrop-blur-md;
   }
 
   .dark .card-surface {
-    @apply bg-zinc-800/80;
+    @apply border-zinc-700/70 bg-zinc-800/85;
+  }
+
+  .input-premium {
+    @apply rounded-xl border border-zinc-200 bg-white px-3.5 py-2.5 text-sm text-zinc-900 shadow-sm outline-none transition-all duration-200 placeholder:text-zinc-400 focus:border-brand-400 focus:ring-2 focus:ring-brand-200/70;
+  }
+
+  .dark .input-premium {
+    @apply border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus:border-brand-500 focus:ring-brand-900/60;
+  }
+
+  .link-animated {
+    @apply relative inline-block;
+  }
+
+  .link-animated::after {
+    content: "";
+    @apply absolute -bottom-0.5 left-0 h-0.5 w-0 rounded-full bg-brand-500 transition-all duration-300;
+  }
+
+  .link-animated:hover::after {
+    @apply w-full;
+  }
+
+  .opacity-0-initial {
+    opacity: 0;
+  }
+
+  .fill-forwards {
+    animation-fill-mode: forwards;
   }
 }
