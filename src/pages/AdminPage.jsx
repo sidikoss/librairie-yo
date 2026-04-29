@@ -11,6 +11,14 @@ const SESSION_TTL = 2 * 60 * 60 * 1000; // 2 h (doit correspondre à l'API)
 const SESSION_KEY = STORAGE_KEYS.adminSession;
 const pdfLib = null;
 
+function resolvePaymentReference(order) {
+  return order.referencePaiement || order.txId || order.payment?.reference || "N/A";
+}
+
+function resolvePaymentSms(order) {
+  return order.paymentSms || order.payment?.smsText || "";
+}
+
 const emptyBookDraft = {
   title: "",
   author: "",
@@ -157,7 +165,8 @@ export default function AdminPage() {
       (o) =>
         String(o.name || "").toLowerCase().includes(q) ||
         String(o.phone || "").includes(q) ||
-        String(o.referencePaiement || o.txId || "").toLowerCase().includes(q),
+        String(resolvePaymentReference(o)).toLowerCase().includes(q) ||
+        String(resolvePaymentSms(o)).toLowerCase().includes(q),
     );
   }, [orders, orderQuery]);
 
@@ -545,8 +554,16 @@ export default function AdminPage() {
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                  {order.phone} · Ref: {order.referencePaiement || order.txId || "N/A"} · Total: {formatGNF(order.total)}
+                  {order.phone} · Ref: {resolvePaymentReference(order)} · Total: {formatGNF(order.total)}
                 </p>
+                {resolvePaymentSms(order) ? (
+                  <div className="mt-2 rounded-lg border border-zinc-200 bg-zinc-50 p-2.5 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                    <p className="mb-1 font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      SMS client
+                    </p>
+                    <p className="whitespace-pre-wrap">{resolvePaymentSms(order)}</p>
+                  </div>
+                ) : null}
                 <div className="mt-2 flex flex-wrap gap-2">
                   <span className="rounded-full bg-zinc-100 dark:bg-zinc-800 px-2 py-1 text-xs font-medium text-zinc-600">
                     Statut: {order.status}

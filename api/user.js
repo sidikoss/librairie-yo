@@ -13,6 +13,15 @@ export default async function handler(req, res) {
   return handleUserOrders(req, res);
 }
 
+function normalizePhone(value) {
+  const digits = String(value || "").replace(/[^\d]/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("224")) return digits;
+  if (digits.startsWith("0")) return `224${digits.slice(1)}`;
+  if (digits.length === 9) return `224${digits}`;
+  return digits;
+}
+
 async function handleUserOrders(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
@@ -44,9 +53,11 @@ async function handleUserOrders(req, res) {
     
     console.log('[Orders] Total orders in DB:', Object.keys(allOrders).length);
     
+    const expectedPhone = normalizePhone(phone);
     const matchingOrders = [];
     for (const [key, order] of Object.entries(allOrders)) {
-      if (order.phone === phone && String(order.pin) === String(pin)) {
+      const orderPhone = normalizePhone(order.phone);
+      if (orderPhone === expectedPhone && String(order.pin) === String(pin)) {
         matchingOrders.push({ ...order, fbKey: key });
       }
     }

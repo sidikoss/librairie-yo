@@ -1,16 +1,161 @@
-// orders endpoint - Get all orders from Firebase
+// orders endpoint - list and create orders
+export const runtime = "nodejs";
+
+function normalizePhone(value) {
+  const digits = String(value || "").replace(/[^\d]/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("224")) return digits;
+  if (digits.startsWith("0")) return `224${digits.slice(1)}`;
+  if (digits.length === 9) return `224${digits}`;
+  return digits;
+}
+
+function sanitizeText(value, max = 800) {
+  return String(value || "")
+    .replace(/[\x00-\x1F\x7F]/g, " ")
+    .trim()
+    .slice(0, max);
+}
+
+function mapOrderItems(items) {
+  if (!Array.isArray(items)) return [];
+  return items
+    .filter(Boolean)
+    .map((item) => {
+      const qty = Math.max(1, Number(item.qty || 1));
+      const unitPrice = Math.max(0, Number(item.unitPrice ?? item.price ?? 0));
+      return {
+        bookId: String(item.bookId || item.id || item.fbKey || "").trim(),
+        title: sanitizeText(item.title || "Livre", 160),
+        qty,
+        unitPrice,
+        price: unitPrice,
+        author: sanitizeText(item.author || "", 120),
+        image: sanitizeText(item.image || "", 500),
+        pages: Number(item.pages || 0) || null,
+        category: sanitizeText(item.category || "", 80),
+      };
+    })
+    .filter((item) => item.bookId || item.title);
+}
+
+function extractReference(orderDraft) {
+  return sanitizeText(
+    orderDraft.referencePaiement ||
+      orderDraft.txId ||
+      orderDraft.payment?.reference ||
+      "",
+    80,
+  );
+}
+
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 'no-store');
-  
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Cache-Control", "no-store");
+
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
+  const dbUrl =
+    process.env.FIREBASE_DATABASE_URL ||
+    "https://librairie-yo-default-rtdb.firebaseio.com";
+
+  if (req.method === "GET") {
+    try {
+      const r = await fetch(`${dbUrl}/orders.json`);
+      const data = (await r.json()) || {};
+      const orders = Object.entries(data)
+        .map(([k, v]) => ({ ...v, fbKey: k }))
+        .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      return res.status(200).json({ success: true, orders, count: orders.length });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
   try {
-    const dbUrl = process.env.FIREBASE_DATABASE_URL || 'https://librairie-yo-default-rtdb.firebaseio.com';
-    const r = await fetch(`${dbUrl}/orders.json`);
-    const data = await r.json() || {};
-    const orders = Object.entries(data).map(([k, v]) => ({ ...v, fbKey: k }))
-      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-    return res.status(200).json({ success: true, orders, count: orders.length });
+    const body =
+      typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
+
+    const phone = normalizePhone(body.phone);
+    const pin = String(body.pin || "").replace(/[^\d]/g, "");
+    const items = mapOrderItems(body.items);
+    const paymentReference = extractReference(body);
+    const paymentSms = sanitizeText(
+      body.paymentSms || body.payment?.smsText || "",
+      1200,
+    );
+
+    if (!sanitizeText(body.name, 120)) {
+      return res.status(400).json({ error: "Nom requis" });
+    }
+    if (!phone || phone.length < 11) {
+      return res.status(400).json({ error: "Téléphone invalide" });
+    }
+    if (!/^\d{4}$/.test(pin)) {
+      return res.status(400).json({ error: "PIN à 4 chiffres requis" });
+    }
+    if (!items.length) {
+      return res.status(400).json({ error: "Aucun article dans la commande" });
+    }
+    if (!paymentReference && !paymentSms) {
+      return res.status(400).json({ error: "Référence ou SMS de paiement requis" });
+    }
+
+    const computedTotal = items.reduce(
+      (sum, item) => sum + Number(item.unitPrice || 0) * Number(item.qty || 1),
+      0,
+    );
+
+    const payload = {
+      name: sanitizeText(body.name, 120),
+      phone,
+      pin,
+      status: "pending",
+      items,
+      subTotal: Number(body.subTotal || computedTotal),
+      discount: Number(body.discount || 0),
+      total: Number(body.total || computedTotal),
+      promoCode: sanitizeText(body.promoCode || "", 40),
+      referencePaiement: paymentReference,
+      txId: paymentReference,
+      paymentSms,
+      payment: {
+        method: "orange_money_manual",
+        reference: paymentReference,
+        smsText: paymentSms,
+        submittedAt: Date.now(),
+      },
+      createdAt: Date.now(),
+    };
+
+    const writeRes = await fetch(`${dbUrl}/orders.json`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const writeData = await writeRes.json().catch(() => ({}));
+    if (!writeRes.ok || !writeData?.name) {
+      return res
+        .status(500)
+        .json({ error: "Impossible d'enregistrer la commande" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      orderId: writeData.name,
+      status: "pending",
+      message: "Commande enregistrée. En attente de validation admin.",
+    });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return res.status(500).json({ error: e.message || "Erreur serveur" });
   }
 }

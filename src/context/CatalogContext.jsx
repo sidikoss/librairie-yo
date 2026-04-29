@@ -169,13 +169,41 @@ export function CatalogProvider({ children }) {
     const payload = {
       ...orderDraft,
       phone: normalizePhone(orderDraft.phone),
-      status: "pending",
-      createdAt: Date.now(),
+      status: orderDraft?.status || "pending",
+      createdAt: orderDraft?.createdAt || Date.now(),
     };
 
+    let orderId = null;
+
+    // Try direct Firebase write first.
     const response = await createOrder(payload);
+    if (response?.name) {
+      orderId = response.name;
+    }
+
+    // Fallback to server-side API route if direct write fails silently.
+    if (!orderId) {
+      try {
+        const res = await fetch("/api/orders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data?.success && data?.orderId) {
+          orderId = data.orderId;
+        }
+      } catch (fallbackError) {
+        console.error("[Orders] API fallback failed:", fallbackError);
+      }
+    }
+
+    if (!orderId) {
+      throw new Error("Impossible d'enregistrer la commande. Veuillez réessayer.");
+    }
+
     await refreshCatalog();
-    return response?.name || null;
+    return orderId;
   };
 
   const findOrdersByPhoneAndPin = async (phone, pin) => {
