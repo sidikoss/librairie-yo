@@ -4,7 +4,6 @@
 import { useMemo, useState } from "react";
 import { STORAGE_KEYS } from "../config/constants";
 import { useCatalog } from "../context/CatalogContext";
-import { usePdfLibrary } from "../hooks/usePdfLibrary";
 import { formatGNF } from "../utils/format";
 
 const SESSION_TTL = 2 * 60 * 60 * 1000; // 2 h (doit correspondre à l'API)
@@ -125,7 +124,6 @@ export default function AdminPage() {
   });
   const [savingBook, setSavingBook] = useState(false);
   const [extracting, setExtracting] = useState(false);
-  const { pdfLib } = usePdfLibrary();
 
   // ── Derived data ─────────────────────────────────────────────────────────
 
