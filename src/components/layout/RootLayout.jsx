@@ -13,7 +13,7 @@ export default function RootLayout() {
     <div className="relative flex min-h-screen flex-col overflow-hidden text-zinc-900 dark:text-white">
       <ScrollToTop />
 
-      {/* Animated background orbs - adapted for dark mode */}
+      {/* Animated background orbs */}
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden="true">
         <div className="absolute -left-32 top-20 h-80 w-80 rounded-full bg-brand-500/8 blur-3xl animate-float dark:bg-indigo-500/15" style={{ transition: 'background 0.5s ease' }} />
         <div className="absolute left-1/2 top-4 h-72 w-72 -translate-x-1/2 rounded-full bg-accent-500/12 blur-3xl animate-float-slow dark:bg-violet-500/10" style={{ transition: 'background 0.5s ease' }} />
