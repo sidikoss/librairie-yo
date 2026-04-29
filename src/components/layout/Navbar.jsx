@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, memo } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { useCart } from "../../context/CartContext";
 import { APP_NAME } from "../../config/constants";
+import { usePwaInstall } from "../../hooks/usePwaInstall";
 
 const navItems = [
   { to: "/", label: "Accueil", icon: "🏠" },
@@ -64,13 +65,7 @@ function ThemeToggle() {
 
 export default function Navbar({ onCartClick }) {
   const { count } = useCart();
-  const [scrolled, setScrolled] = useState(false);
-
-  useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  const { isInstallable, installPWA } = usePwaInstall();
 
   return (
     <header

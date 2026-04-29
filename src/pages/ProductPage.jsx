@@ -10,6 +10,20 @@ import { buildWhatsAppUrl } from "../features/whatsapp/whatsapp";
 import { useCart } from "../context/CartContext";
 import { useCatalog } from "../context/CatalogContext";
 
+function Badge({ tone = "brand", children }) {
+  const tones = {
+    brand: "bg-brand-100 text-brand-700",
+    new: "bg-blue-100 text-blue-700",
+    promo: "bg-green-100 text-green-700",
+  };
+
+  return (
+    <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${tones[tone] || tones.brand}`}>
+      {children}
+    </span>
+  );
+}
+
 export default function ProductPage() {
   const { id } = useParams();
   const navigate = useNavigate();

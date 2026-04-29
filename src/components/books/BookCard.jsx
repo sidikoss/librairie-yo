@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import LazyImage from "../common/LazyImage";
 import PriceTag from "../ui/PriceTag";
 import RatingStars from "../ui/RatingStars";
-import { buildWhatsAppUrl } from "../../features/whatsapp/whatsapp";
+import SalesCounter from "../ui/SalesCounter";
+import { buildBookWhatsAppUrl } from "../../features/whatsapp/whatsapp";
 
 const BookCard = memo(function BookCard({
   book,

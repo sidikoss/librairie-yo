@@ -9,6 +9,7 @@ import { formatGNF } from "../utils/format";
 const SESSION_TTL = 2 * 60 * 60 * 1000; // 2 h (doit correspondre à l'API)
 
 const SESSION_KEY = STORAGE_KEYS.adminSession;
+const pdfLib = null;
 
 const emptyBookDraft = {
   title: "",
