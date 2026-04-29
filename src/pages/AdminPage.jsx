@@ -5,7 +5,6 @@ import { useMemo, useState } from "react";
 import { STORAGE_KEYS } from "../config/constants";
 import { useCatalog } from "../context/CatalogContext";
 import { usePdfLibrary } from "../hooks/usePdfLibrary";
-import { generateMetadata } from "../services/claudeClient";
 import { formatGNF } from "../utils/format";
 
 const SESSION_TTL = 2 * 60 * 60 * 1000; // 2 h (doit correspondre à l'API)
@@ -223,12 +222,11 @@ export default function AdminPage() {
           const text = textContent.items.map(i => i.str).join(" ").substring(0, 1500);
           
           if (text.trim()) {
-            const meta = await generateMetadata(text);
+            // Simple metadata extraction without Claude
+            const words = text.split(/\s+/).slice(0, 50).join(' ');
             setBookDraft((p) => ({
               ...p,
-              title: meta.title || p.title,
-              author: meta.author || p.author,
-              description: meta.summary || p.description,
+              description: words || p.description,
             }));
           }
         } catch (extractError) {

@@ -2,7 +2,6 @@
 // API Firebase avec caching et optimisation des performances
 
 import { FIREBASE_DB_URL } from "../config/constants";
-import { validateApiPath } from "../utils/apiSecurity";
 
 const CACHE = new Map();
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -45,12 +44,6 @@ function clearCache() {
 }
 
 async function request(path, options = {}, timeoutMs = 10000) {
-  const pathValidation = validateApiPath(path);
-  if (!pathValidation.valid) {
-    console.warn("[Firebase] Invalid path:", pathValidation.error);
-    return null;
-  }
-  
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   const method = options.method || "GET";

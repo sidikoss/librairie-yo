@@ -6,15 +6,12 @@ import ScrollToTop from "./ScrollToTop";
 import MobileWhatsAppFab from "./MobileWhatsAppFab";
 import CartSidebar from "../cart/CartSidebar";
 import { Analytics } from "@vercel/analytics/react";
-import { PreloadHints, DNSPrefetch } from "../common/ResourceHints";
 
 export default function RootLayout() {
   const [isCartOpen, setIsCartOpen] = useState(false);
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden text-zinc-900 dark:text-white">
-      <PreloadHints />
-      <DNSPrefetch />
       <ScrollToTop />
 
       {/* Animated background orbs - adapted for dark mode */}

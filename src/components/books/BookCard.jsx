@@ -1,11 +1,9 @@
 import { memo, useState } from "react";
 import { Link } from "react-router-dom";
 import LazyImage from "../common/LazyImage";
-import Badge from "../ui/Badge";
 import PriceTag from "../ui/PriceTag";
 import RatingStars from "../ui/RatingStars";
-import SalesCounter from "../ui/SalesCounter";
-import { buildBookWhatsAppUrl } from "../../features/whatsapp/whatsapp";
+import { buildWhatsAppUrl } from "../../features/whatsapp/whatsapp";
 
 const BookCard = memo(function BookCard({
   book,
@@ -63,9 +61,9 @@ const BookCard = memo(function BookCard({
 
         {/* Badges */}
         <div className="absolute left-3 top-3 flex flex-wrap gap-1.5" role="list" aria-label="Badges du livre">
-          {book.isNew ? <Badge tone="new">Nouveau</Badge> : null}
-          {book.isPopular ? <Badge tone="popular">Populaire</Badge> : null}
-          {book.discount > 0 ? <Badge tone="promo">Promo</Badge> : null}
+          {book.isNew ? <span className="rounded-full bg-blue-500 px-2 py-0.5 text-xs font-bold text-white">Nouveau</span> : null}
+          {book.isPopular ? <span className="rounded-full bg-orange-500 px-2 py-0.5 text-xs font-bold text-white">Populaire</span> : null}
+          {book.discount > 0 ? <span className="rounded-full bg-green-500 px-2 py-0.5 text-xs font-bold text-white">Promo</span> : null}
         </div>
 
         {/* Wishlist button */}

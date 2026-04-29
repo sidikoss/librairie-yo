@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useCatalog } from "../../context/CatalogContext";
-import { buildBookWhatsAppUrl } from "../../features/whatsapp/whatsapp";
+import { buildWhatsAppUrl } from "../../features/whatsapp/whatsapp";
 import { TRUST_BANNER, WA_NUMBER } from "../../config/constants";
 
 export default function HeroSection() {

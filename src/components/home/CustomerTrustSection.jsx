@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { CUSTOMER_REVIEWS, TRUST_BANNER } from "../../config/constants";
 import RatingStars from "../ui/RatingStars";
-import SalesCounter from "../ui/SalesCounter";
 
 function AnimatedCounter({ target }) {
   const [count, setCount] = useState(0);

@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
 import { APP_NAME, OM_NUMBER, WA_NUMBER } from "../../config/constants";
 import { buildWhatsAppUrl } from "../../features/whatsapp/whatsapp";
-import { usePWAInstall } from "../../hooks/usePWAInstall";
 
 function formatPhone(num) {
   const cleaned = String(num || "").replace(/^224/, "");
@@ -10,7 +9,6 @@ function formatPhone(num) {
 
 export default function Footer() {
   const year = new Date().getFullYear();
-  const { isInstallable, installPWA } = usePWAInstall();
   return (
     <footer className="relative mt-16 overflow-hidden border-t border-zinc-200/50 dark:border-zinc-800/50">
       {/* Gradient background */}

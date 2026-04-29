@@ -1,14 +1,12 @@
 import { useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import LazyImage from "../components/common/LazyImage";
-import Badge from "../components/ui/Badge";
 import PriceTag from "../components/ui/PriceTag";
 import RatingStars from "../components/ui/RatingStars";
-import SalesCounter from "../components/ui/SalesCounter";
 import SectionHeader from "../components/ui/SectionHeader";
 import BookSkeleton from "../components/ui/BookSkeleton";
 import SEO from "../components/seo/SEO";
-import { buildBookWhatsAppUrl } from "../features/whatsapp/whatsapp";
+import { buildWhatsAppUrl } from "../features/whatsapp/whatsapp";
 import { useCart } from "../context/CartContext";
 import { useCatalog } from "../context/CatalogContext";
 
@@ -120,9 +118,6 @@ export default function ProductPage() {
 
           <div className="flex items-center gap-4">
             <PriceTag price={book.price} discount={book.discount} size="lg" />
-            {book.salesCount > 0 && (
-              <SalesCounter value={book.salesCount} />
-            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -157,7 +152,7 @@ export default function ProductPage() {
             </button>
 
             <a
-              href={buildBookWhatsAppUrl(book, 1)}
+              href={buildWhatsAppUrl(book, 1)}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center justify-center gap-2 rounded-xl bg-guinea-500 px-6 py-4 text-lg font-bold text-white shadow-lg transition-all hover:-translate-y-1 hover:shadow-xl"

@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, memo } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { useCart } from "../../context/CartContext";
-import { usePWAInstall } from "../../hooks/usePWAInstall";
 import { APP_NAME } from "../../config/constants";
 
 const navItems = [
@@ -66,7 +65,6 @@ function ThemeToggle() {
 export default function Navbar({ onCartClick }) {
   const { count } = useCart();
   const [scrolled, setScrolled] = useState(false);
-  const { isInstallable, installPWA } = usePWAInstall();
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
