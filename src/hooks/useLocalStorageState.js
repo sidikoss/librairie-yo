@@ -1,11 +1,10 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 
 export function useLocalStorageState(key, initialValue) {
   const [state, setState] = useState(() => {
     try {
-      const raw = localStorage.getItem(key);
-      if (raw === null) return initialValue;
-      return JSON.parse(raw);
+      const item = localStorage.getItem(key);
+      return item ? JSON.parse(item) : initialValue;
     } catch {
       return initialValue;
     }
@@ -14,8 +13,8 @@ export function useLocalStorageState(key, initialValue) {
   useEffect(() => {
     try {
       localStorage.setItem(key, JSON.stringify(state));
-    } catch {
-      // Ignore storage errors to keep UX resilient on low-memory devices.
+    } catch (e) {
+      console.warn("Failed to save to localStorage:", e);
     }
   }, [key, state]);
 
