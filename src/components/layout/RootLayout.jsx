@@ -5,7 +5,6 @@ import Footer from "./Footer";
 import ScrollToTop from "./ScrollToTop";
 import MobileWhatsAppFab from "./MobileWhatsAppFab";
 import CartSidebar from "../cart/CartSidebar";
-import { Analytics } from "@vercel/analytics/react";
 
 export default function RootLayout() {
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -37,7 +36,6 @@ export default function RootLayout() {
           aria-hidden="true"
         />
       )}
-      <Analytics />
     </div>
   );
 }
