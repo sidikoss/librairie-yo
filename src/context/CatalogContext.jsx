@@ -11,14 +11,10 @@ import {
 } from "../services/bookService";
 import {
   buildSalesByBookMap,
-  createOrder,
   createPromoCode,
   deletePromoCode,
-  fetchOrders,
-  fetchOrdersFresh,
   fetchPromoCodes,
   togglePromoCode,
-  updateOrderStatus as apiUpdateOrderStatus,
 } from "../services/orderService";
 import {
   normalizeBook,
@@ -46,6 +42,15 @@ function saveCachedBooks(books) {
   }
 }
 
+function loadAdminToken() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.adminSession);
+    return raw ? JSON.parse(raw)?.token || null : null;
+  } catch {
+    return null;
+  }
+}
+
 export function CatalogProvider({ children }) {
   const [books, setBooks] = useState(loadCachedBooks);
   const [orders, setOrders] = useState([]);
@@ -59,16 +64,36 @@ export function CatalogProvider({ children }) {
     [],
   );
 
-  const refreshCatalog = useCallback(async (useFresh = false) => {
+  const fetchOrdersFromAdminApi = useCallback(async () => {
+    const token = loadAdminToken();
+    if (!token) return [];
+    try {
+      const res = await fetch("/api/admin?action=get-orders", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok || !Array.isArray(data.orders)) {
+        return [];
+      }
+      return data.orders;
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const refreshCatalog = useCallback(async (options = {}) => {
+    const includeOrders = Boolean(options?.includeOrders);
     setError("");
     setSyncing(true);
 
     try {
-      const ordersFetcher = useFresh ? fetchOrdersFresh : fetchOrders;
-      const [rawBooks, rawOrders, rawPromos] = await Promise.all([
+      const [rawBooks, rawPromos, rawOrders] = await Promise.all([
         fetchBooks(),
-        ordersFetcher(),
         fetchPromoCodes(),
+        includeOrders ? fetchOrdersFromAdminApi() : Promise.resolve([]),
       ]);
 
       const salesMap = buildSalesByBookMap(rawOrders);
@@ -89,7 +114,7 @@ export function CatalogProvider({ children }) {
       setLoading(false);
       setSyncing(false);
     }
-  }, []);
+  }, [fetchOrdersFromAdminApi]);
 
   useEffect(() => {
     refreshCatalog();
@@ -172,38 +197,19 @@ export function CatalogProvider({ children }) {
       status: orderDraft?.status || "pending",
       createdAt: orderDraft?.createdAt || Date.now(),
     };
-
-    let orderId = null;
-
-    // Try direct Firebase write first.
-    const response = await createOrder(payload);
-    if (response?.name) {
-      orderId = response.name;
+    const res = await fetch("/api/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.success || !data?.orderId) {
+      throw new Error(
+        data?.error || "Impossible d'enregistrer la commande. Veuillez reessayer.",
+      );
     }
-
-    // Fallback to server-side API route if direct write fails silently.
-    if (!orderId) {
-      try {
-        const res = await fetch("/api/orders", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (res.ok && data?.success && data?.orderId) {
-          orderId = data.orderId;
-        }
-      } catch (fallbackError) {
-        console.error("[Orders] API fallback failed:", fallbackError);
-      }
-    }
-
-    if (!orderId) {
-      throw new Error("Impossible d'enregistrer la commande. Veuillez réessayer.");
-    }
-
     await refreshCatalog();
-    return orderId;
+    return data.orderId;
   };
 
   const findOrdersByPhoneAndPin = async (phone, pin) => {
@@ -227,45 +233,23 @@ export function CatalogProvider({ children }) {
   };
 
   const setOrderStatus = async (orderId, status) => {
-    console.log('[Admin] Updating order:', orderId, 'to', status);
-    
-    // Try admin API first (server-side) - use same key as AdminPage.jsx
-    const SESSION_KEY = STORAGE_KEYS.adminSession;
-    
-    try {
-      const raw = localStorage.getItem(SESSION_KEY);
-      const token = raw ? JSON.parse(raw)?.token : null;
-      console.log('[Admin] Token exists:', !!token);
-      
-      if (token) {
-        const res = await fetch('/api/admin?action=update-order', {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({ orderId, status })
-        });
-        console.log('[Admin] API response:', res.status);
-        
-        if (res.ok) {
-          const data = await res.json();
-          console.log('[Admin] API success:', data);
-          await refreshCatalog();
-          return;
-        } else {
-          const data = await res.json();
-          console.error('[Admin] API error:', data);
-        }
-      }
-    } catch (e) {
-      console.warn('[Admin] API update failed:', e.message);
+    const token = loadAdminToken();
+    if (!token) {
+      throw new Error("Session admin invalide. Reconnectez-vous.");
     }
-    
-    // Fallback to Firebase API (client-side)
-    console.log('[Admin] Trying client-side Firebase update...');
-    await apiUpdateOrderStatus(orderId, status);
-    await refreshCatalog();
+    const res = await fetch("/api/admin?action=update-order", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ orderId, status }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.ok) {
+      throw new Error(data?.error || "Erreur mise a jour commande");
+    }
+    await refreshCatalog({ includeOrders: true });
   };
 
   const getBookFile = async (bookId) => {

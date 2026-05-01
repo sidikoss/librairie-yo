@@ -1,4 +1,5 @@
 import { getAdminAuth, getAdminDatabase, getAdminFirestore, getAdminStorage } from "../_lib/firebaseAdmin.js";
+import { verifyPinWithOrder } from "../_lib/security.js";
 
 const READER_RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;
 const READER_RATE_LIMIT_MAX = Number(process.env.READER_RATE_LIMIT_MAX || 80);
@@ -239,15 +240,13 @@ async function resolvePdfSource(bookId) {
 
 function hasLegacyMatch(order, req) {
   const orderPhone = normalizeDigits(order?.phone);
-  const orderPin = safeString(order?.pin);
-
-  if (!orderPhone || !orderPin) return false;
+  if (!orderPhone) return false;
 
   const phoneHeader = normalizeDigits(req.headers["x-order-phone"]);
   const pinHeader = safeString(req.headers["x-order-pin"]);
 
   if (!phoneHeader || !pinHeader) return false;
-  return phoneHeader === orderPhone && pinHeader === orderPin;
+  return phoneHeader === orderPhone && verifyPinWithOrder(order, pinHeader);
 }
 
 async function verifyIdToken(req) {
