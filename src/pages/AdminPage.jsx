@@ -1,7 +1,7 @@
 // src/pages/AdminPage.jsx
 // Auth déplacée côté serveur — le mot de passe n'est plus dans le bundle JS.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { STORAGE_KEYS } from "../config/constants";
 import { useCatalog } from "../context/CatalogContext";
 import { formatGNF } from "../utils/format";
@@ -111,7 +111,11 @@ export default function AdminPage() {
 
   // Fetch orders from server API (bypasses client-side Firebase issues)
   async function fetchOrdersFromServer() {
-    const res = await fetch("/api/admin?action=get-orders");
+    const res = await fetch("/api/admin?action=get-orders", {
+      headers: adminToken
+        ? { Authorization: `Bearer ${adminToken}` }
+        : {},
+    });
     const data = await res.json();
     if (data.ok && data.orders) {
       return data.orders;
@@ -179,6 +183,7 @@ export default function AdminPage() {
       const token = await loginWithPassword(password);
       saveAdminSession(token);
       setAdminToken(token);
+      await refreshCatalog({ includeOrders: true });
       setPassword("");
     } catch (err) {
       setLoginError(err.message || "Erreur de connexion");
@@ -193,6 +198,11 @@ export default function AdminPage() {
     setPassword("");
     setLoginError("");
   };
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    refreshCatalog({ includeOrders: true });
+  }, [isLoggedIn, refreshCatalog]);
 
   // ── Book handlers ─────────────────────────────────────────────────────────
 
@@ -346,7 +356,7 @@ export default function AdminPage() {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={refreshCatalog}
+            onClick={() => refreshCatalog({ includeOrders: true })}
             className="rounded-xl border border-zinc-300 dark:border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-300"
           >
             {syncing ? "Sync..." : "Synchroniser"}

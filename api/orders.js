@@ -1,5 +1,12 @@
-// orders endpoint - list and create orders
+// orders endpoint - create orders and protected admin listing
 export const runtime = "nodejs";
+
+import { withRateLimit } from "./_lib/rateLimiter.js";
+import {
+  hashPin,
+  requireAdminToken,
+  sanitizeOrderForResponse,
+} from "./_lib/security.js";
 
 function normalizePhone(value) {
   const digits = String(value || "").replace(/[^\d]/g, "");
@@ -49,10 +56,32 @@ function extractReference(orderDraft) {
   );
 }
 
-export default async function handler(req, res) {
+function findPromoByCode(promoMap, code) {
+  const input = String(code || "").trim().toUpperCase();
+  if (!input) return null;
+  for (const [key, promo] of Object.entries(promoMap || {})) {
+    if (!promo || String(promo.code || "").toUpperCase() !== input) continue;
+    if (promo.active === false) return null;
+    const maxUses = Number(promo.maxUses || 0);
+    const uses = Number(promo.uses || 0);
+    if (maxUses > 0 && uses >= maxUses) return null;
+    return { ...promo, fbKey: key };
+  }
+  return null;
+}
+
+function computeDiscount(subTotal, promo) {
+  if (!promo) return 0;
+  if (String(promo.type || "").toLowerCase() === "fixed") {
+    return Math.max(0, Number(promo.discount || 0));
+  }
+  return Math.round(subTotal * (Math.max(0, Number(promo.discount || 0)) / 100));
+}
+
+async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
   res.setHeader("Cache-Control", "no-store");
 
   if (req.method === "OPTIONS") {
@@ -64,11 +93,15 @@ export default async function handler(req, res) {
     "https://librairie-yo-default-rtdb.firebaseio.com";
 
   if (req.method === "GET") {
+    const authCheck = requireAdminToken(req);
+    if (!authCheck.ok) {
+      return res.status(401).json({ error: authCheck.error });
+    }
     try {
       const r = await fetch(`${dbUrl}/orders.json`);
       const data = (await r.json()) || {};
       const orders = Object.entries(data)
-        .map(([k, v]) => ({ ...v, fbKey: k }))
+        .map(([k, v]) => sanitizeOrderForResponse({ ...v, fbKey: k }))
         .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       return res.status(200).json({ success: true, orders, count: orders.length });
     } catch (e) {
@@ -97,33 +130,43 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Nom requis" });
     }
     if (!phone || phone.length < 11) {
-      return res.status(400).json({ error: "Téléphone invalide" });
+      return res.status(400).json({ error: "Telephone invalide" });
     }
     if (!/^\d{4}$/.test(pin)) {
-      return res.status(400).json({ error: "PIN à 4 chiffres requis" });
+      return res.status(400).json({ error: "PIN a 4 chiffres requis" });
     }
     if (!items.length) {
       return res.status(400).json({ error: "Aucun article dans la commande" });
     }
     if (!paymentReference && !paymentSms) {
-      return res.status(400).json({ error: "Référence ou SMS de paiement requis" });
+      return res.status(400).json({ error: "Reference ou SMS de paiement requis" });
     }
 
-    const computedTotal = items.reduce(
+    const subTotal = items.reduce(
       (sum, item) => sum + Number(item.unitPrice || 0) * Number(item.qty || 1),
       0,
     );
+    const promoCode = sanitizeText(body.promoCode || "", 40).toUpperCase();
+
+    let promo = null;
+    if (promoCode) {
+      const promoRes = await fetch(`${dbUrl}/promoCodes.json`);
+      const promoData = (await promoRes.json()) || {};
+      promo = findPromoByCode(promoData, promoCode);
+    }
+    const discount = Math.min(subTotal, computeDiscount(subTotal, promo));
+    const total = Math.max(0, subTotal - discount);
 
     const payload = {
       name: sanitizeText(body.name, 120),
       phone,
-      pin,
+      pinHash: hashPin(pin),
       status: "pending",
       items,
-      subTotal: Number(body.subTotal || computedTotal),
-      discount: Number(body.discount || 0),
-      total: Number(body.total || computedTotal),
-      promoCode: sanitizeText(body.promoCode || "", 40),
+      subTotal,
+      discount,
+      total,
+      promoCode: promo?.code || "",
       referencePaiement: paymentReference,
       txId: paymentReference,
       paymentSms,
@@ -153,9 +196,14 @@ export default async function handler(req, res) {
       success: true,
       orderId: writeData.name,
       status: "pending",
-      message: "Commande enregistrée. En attente de validation admin.",
+      message: "Commande enregistree. En attente de validation admin.",
     });
   } catch (e) {
     return res.status(500).json({ error: e.message || "Erreur serveur" });
   }
 }
+
+export default withRateLimit(handler, "/api/orders", {
+  maxRequests: 40,
+  windowMs: 60_000,
+});

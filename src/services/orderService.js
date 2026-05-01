@@ -1,34 +1,58 @@
 import { firebaseApi } from "./firebaseApi";
+import { STORAGE_KEYS } from "../config/constants";
 
-export async function fetchOrders(options = {}) {
-  console.log('[OrderService] fetchOrders called, cache:', options.cache);
-  const data = await firebaseApi.get("orders", 10000, { cache: options.cache !== false });
-  console.log('[OrderService] got data:', data ? Object.keys(data).length + ' orders' : 'null');
-  if (!data) return [];
-  return Object.entries(data)
-    .map(([fbKey, value]) => ({ ...value, fbKey }))
-    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+function getAdminToken() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.adminSession);
+    return raw ? JSON.parse(raw)?.token || null : null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchOrdersFromAdminApi() {
+  const token = getAdminToken();
+  if (!token) return [];
+
+  const res = await fetch("/api/admin?action=get-orders", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data?.ok || !Array.isArray(data.orders)) return [];
+  return data.orders;
+}
+
+export async function fetchOrders() {
+  const orders = await fetchOrdersFromAdminApi();
+  return orders.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 }
 
 export async function fetchOrdersFresh() {
-  console.log('[OrderService] fetchOrdersFresh called');
-  const data = await firebaseApi.get("orders", 10000, { cache: false });
-  console.log('[OrderService] got fresh data:', data ? Object.keys(data).length + ' orders' : 'null');
-  if (!data) return [];
-  return Object.entries(data)
-    .map(([fbKey, value]) => ({ ...value, fbKey }))
-    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  return fetchOrders();
 }
 
 export async function createOrder(payload) {
-  return firebaseApi.post("orders", payload);
+  const res = await fetch("/api/orders", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  return data?.orderId ? { name: data.orderId } : null;
 }
 
 export async function updateOrderStatus(orderId, status) {
-  return firebaseApi.patch(`orders/${orderId}`, {
-    status,
-    reviewedAt: Date.now(),
+  const token = getAdminToken();
+  if (!token) return null;
+  const res = await fetch("/api/admin?action=update-order", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ orderId, status }),
   });
+  return res.ok ? res.json().catch(() => ({})) : null;
 }
 
 export async function fetchPromoCodes() {

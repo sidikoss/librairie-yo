@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import SectionHeader from "../components/ui/SectionHeader";
 import { ensureReaderSession, isFirebaseReaderConfigured } from "../services/firebaseClient";
+import { usePdfLibrary } from "../hooks/usePdfLibrary";
 
 
 function normalizeDigits(value) {

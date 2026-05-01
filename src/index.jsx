@@ -6,6 +6,7 @@ import { HelmetProvider } from "react-helmet-async";
 import App from "./App";
 import { CatalogProvider } from "./context/CatalogContext";
 import { CartProvider } from "./context/CartContext";
+import { ToastProvider } from "./components/ui/Toast";
 import "./index.css";
 
 const container = document.getElementById("root");
@@ -18,7 +19,9 @@ if (container) {
         <BrowserRouter>
           <CatalogProvider>
             <CartProvider>
-              <App />
+              <ToastProvider>
+                <App />
+              </ToastProvider>
             </CartProvider>
           </CatalogProvider>
         </BrowserRouter>
@@ -26,3 +29,4 @@ if (container) {
     </StrictMode>
   );
 }
+
