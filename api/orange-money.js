@@ -2,7 +2,6 @@
 // We delegate POST processing to /api/orders to keep one secure source of truth.
 export const runtime = "nodejs";
 
-import { withRateLimit } from "./_lib/rateLimiter.js";
 import ordersHandler from "./orders.js";
 
 async function handler(req, res) {
@@ -27,10 +26,10 @@ async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
+  // Delegate to orders handler (which already has its own rate limiting)
   return ordersHandler(req, res);
 }
 
-export default withRateLimit(handler, "/api/orange-money", {
-  maxRequests: 40,
-  windowMs: 60_000,
-});
+// No withRateLimit wrapper here — ordersHandler already applies rate limiting.
+export default handler;
+

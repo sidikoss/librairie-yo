@@ -1,8 +1,10 @@
+import { useNavigate } from "react-router-dom";
 import { useCart } from "../../context/CartContext";
 import { X, Trash2 } from "lucide-react";
 import { WA_NUMBER } from "../../config/constants";
 
 export default function CartSidebar({ isOpen, onClose }) {
+  const navigate = useNavigate();
   const { items, removeItem, total, clearCart } = useCart();
 
   const waMessage = items.length > 0 
@@ -61,7 +63,7 @@ export default function CartSidebar({ isOpen, onClose }) {
               
               <div className="flex gap-2">
                 <button
-                  onClick={() => window.location.href = '/panier'}
+                  onClick={() => { onClose(); navigate('/panier'); }}
                   className="flex-1 border border-gray-300 py-2 rounded-lg text-sm hover:bg-gray-50 transition"
                 >
                   Voir détails
@@ -80,3 +82,4 @@ export default function CartSidebar({ isOpen, onClose }) {
     </div>
   );
 }
+
